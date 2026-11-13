@@ -89,6 +89,42 @@ a:hover { text-decoration-color: var(--fg); }
 .top-links a { color: var(--muted); text-decoration: none; transition: color .15s; }
 .top-links a:hover { color: var(--fg); }
 
+/* GitHub stars */
+:root { --star: oklch(0.82 0.16 85); }
+.top-links { align-items: center; }
+.gh-stars { display: inline-flex; align-items: center; gap: 8px; }
+.top-links .gh-stars-link { display: inline-flex; }
+.gh-stars-logo { width: 16px; height: 16px; flex: none; }
+.gh-stars-count {
+  display: inline-flex; align-items: center; gap: 4px;
+  font: 500 12.5px/1 var(--mono); font-variant-numeric: tabular-nums;
+  opacity: 0; transition: opacity .3s;
+}
+.is-loaded .gh-stars-count { opacity: 1; }
+.is-failed .gh-stars-count { display: none; }
+.gh-stars-particles { position: relative; display: inline-flex; width: 13px; height: 13px; }
+.gh-stars-star { width: 13px; height: 13px; overflow: visible; }
+.gh-stars-star .o { fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
+.gh-stars-star .f {
+  fill: var(--star); stroke: var(--star); stroke-width: 2; stroke-linejoin: round;
+  clip-path: inset(calc((1 - var(--fill, 0)) * 100%) 0 0 0);
+}
+.is-complete > .gh-stars-count .gh-stars-star:first-child .o { stroke: var(--star); }
+.is-complete > .gh-stars-count .gh-stars-star:first-child { animation: gh-pop .45s cubic-bezier(.3, 1.6, .5, 1); }
+.gh-stars-particle { position: absolute; inset: 0; pointer-events: none; animation: gh-fly .75s cubic-bezier(.2, .7, .3, 1) forwards; }
+.gh-stars-particle .o { display: none; }
+.gh-stars-particle .f { clip-path: none; }
+@keyframes gh-pop { 40% { transform: scale(1.35); } }
+@keyframes gh-fly {
+  from { transform: translate(0, 0) scale(.7) rotate(0); opacity: 1; }
+  to { transform: translate(var(--dx), var(--dy)) scale(.25) rotate(var(--r)); opacity: 0; }
+}
+.gh-btn .gh-stars-count { margin-left: 2px; padding-left: 10px; height: 18px; border-left: 1px solid var(--line); color: var(--muted); }
+.gh-btn:hover .gh-stars-count { color: var(--fg); }
+@media (prefers-reduced-motion: reduce) {
+  .gh-stars-particle, .is-complete > .gh-stars-count .gh-stars-star:first-child { animation: none; }
+}
+
 /* Hero */
 .hero { max-width: 1080px; margin: 0 auto; padding: 96px 24px 40px; }
 .eyebrow { margin: 0 0 20px; font: 500 12px/1 var(--mono); letter-spacing: .04em; color: var(--muted); text-transform: uppercase; }
