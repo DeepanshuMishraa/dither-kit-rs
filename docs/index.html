@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>dither-kit-rs</title>
+  <meta name="description" content="Ordered-dither charts, buttons, gradients and backgrounds for GPUI and Ratatui. One engine, identical pixels everywhere.">
+  <meta name="theme-color" content="#0b0b0c" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
+  <meta property="og:title" content="dither-kit-rs">
+  <meta property="og:description" content="Dithered interfaces for Rust: GPUI and Ratatui.">
+  <meta property="og:image" content="preview.png">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="top-inner">
+      <a class="mark" href="#" aria-label="dither-kit-rs home">
+        <canvas class="logo" data-demo="logo" width="18" height="18" aria-hidden="true"></canvas>
+        <span>dither-kit-rs</span>
+      </a>
+      <nav class="top-links">
+        <a href="#install">Docs</a>
+        <a href="#components">Components</a>
+        <a href="https://github.com/DeepanshuMishraa/dither-kit-rs">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="eyebrow">GPUI Kit · Ratatui · Rust</p>
+      <h1>Dithered interfaces<br>for Rust.</h1>
+      <p class="lede">Charts, buttons, gradients and backgrounds built from ordered dither.
+        One engine draws the same pixels on the desktop and in the terminal.</p>
+      <div class="actions">
+        <a class="btn primary" href="#install">Get started</a>
+        <a class="btn" href="https://github.com/DeepanshuMishraa/dither-kit-rs">View on GitHub</a>
+      </div>
+
+      <figure class="hero-figure">
+        <div class="chart-head">
+          <div>
+            <div class="chart-title">Visitors</div>
+            <div class="chart-sub">Last 12 months</div>
+          </div>
+          <div class="legend" id="hero-legend"></div>
+        </div>
+        <div class="hero-stage" id="hero-stage">
+          <canvas data-demo="hero" aria-label="Dithered area chart of visitors over twelve months" role="img"></canvas>
+          <div class="tip" id="hero-tip" hidden></div>
+        </div>
+        <div class="xlabels" id="hero-x"></div>
+      </figure>
+    </section>
+
+    <div class="doc">
+      <aside class="toc" aria-label="On this page">
+        <a href="#install">Installation</a>
+        <a href="#gpui">GPUI Kit</a>
+        <a href="#ratatui">Ratatui</a>
+        <a href="#components">Components</a>
+        <a href="#vocabulary">Vocabulary</a>
+        <a href="#motion">Motion &amp; access</a>
+        <a href="#core">The core</a>
+      </aside>
+
+      <article class="content">
+        <section id="intro">
+          <p class="big">Dithering turns smooth values into patterns of lit and unlit pixels.
+            It is an old print technique that gives interfaces a crisp, tactile texture.
+            dither-kit-rs brings it to native Rust UIs.</p>
+          <dl class="facts">
+            <div><dt>Deterministic</dt><dd>Ordered Bayer thresholds are stateless per pixel. Nothing shimmers while animating.</dd></div>
+            <div><dt>Native</dt><dd>GPU quads in GPUI. Half-block glyphs in the terminal. Text stays real text.</dd></div>
+            <div><dt>Small</dt><dd>The core has no dependencies. Each frontend is a thin painter.</dd></div>
+          </dl>
+        </section>
+
+        <section id="install">
+          <h2>Installation</h2>
+          <p>Add the frontend you need from Git. The minimum supported Rust version is 1.95.</p>
+          <pre><code class="language-toml"># Desktop
+dither-gpui = { git = "https://github.com/DeepanshuMishraa/dither-kit-rs" }
+gpui-kit = "=0.7.3"
+
+# Terminal
+dither-ratatui = { git = "https://github.com/DeepanshuMishraa/dither-kit-rs" }
+ratatui = "0.30"</code></pre>
+          <p class="note">GPUI Kit is pinned to 0.7.3, the release <a href="https://github.com/1bye/gpui-motion">gpui-motion-kit</a> 0.5 is built against.</p>
+        </section>
+
+        <section id="gpui">
+          <h2>GPUI Kit</h2>
+          <p>Components are <code>RenderOnce</code> values with an id. Hover, selection, entrance and tooltip state are kept for you, so you only pass in data.</p>
+          <pre><code class="language-rust">use dither_gpui::prelude::*;
+
+DitherChart::area("visitors", vec![
+    Series::new("Desktop", Tone::Blue, vec![186., 305., 237., 73., 209., 214.]),
+    Series::new("Mobile",  Tone::Pink, vec![80., 200., 120., 190., 130., 140.])
+        .fill(Fill::Hatched),
+])
+.labels(["Jan", "Feb", "Mar", "Apr", "May", "Jun"])
+.bloom(Bloom::Low)
+.on_hover_change(cx.listener(|this, index: &Option&lt;usize&gt;, _, cx| {
+    this.focus = *index;
+    cx.notify();
+}))</code></pre>
+        </section>
+
+        <section id="ratatui">
+          <h2>Ratatui</h2>
+          <p>Widgets are plain values. Each terminal cell holds two square pixels. Hit-test helpers turn mouse positions into data indexes.</p>
+          <pre><code class="language-rust">use dither_ratatui::{Chart, prelude::*};
+
+let chart = Chart::area(&amp;series)
+    .labels(&amp;labels)
+    .hover(chart.index_at(area, mouse.column, mouse.row))
+    .progress(ease::out_cubic(t));
+
+frame.render_widget(chart, area);</code></pre>
+          <p class="note">Requires a truecolor terminal.</p>
+        </section>
+
+        <section id="components">
+          <h2>Components</h2>
+          <p>Each one exists in both frontends. These demos run on a JavaScript port of the core, so they are the same pixels the crates draw.</p>
+
+          <div class="specimens">
+            <figure class="spec">
+              <div class="stage center"><canvas data-demo="pie" class="sq" role="img" aria-label="Donut chart"></canvas><div class="pie-center" id="pie-center"></div></div>
+              <figcaption><h3>Pie &amp; donut</h3><p>Hover lifts a slice. The centre shows the total.</p><code>DitherPie · PieChart</code></figcaption>
+            </figure>
+            <figure class="spec">
+              <div class="stage center"><canvas data-demo="radar" class="sq" role="img" aria-label="Radar chart"></canvas></div>
+              <figcaption><h3>Radar</h3><p>Rings, spokes and dithered polygons.</p><code>DitherRadar · RadarChart</code></figcaption>
+            </figure>
+            <figure class="spec">
+              <div class="stage pad">
+                <div class="stat"><span class="stat-label">Revenue</span><span class="stat-value">$48.2k <em>+12.4%</em></span></div>
+                <canvas data-demo="spark" class="spark" role="img" aria-label="Sparkline"></canvas>
+              </div>
+              <figcaption><h3>Sparkline</h3><p>No axes or chrome. Glows on hover.</p><code>DitherSparkline · Sparkline</code></figcaption>
+            </figure>
+            <figure class="spec">
+              <div class="stage center buttons">
+                <button class="dbtn" data-tone="green" data-style="solid"><canvas aria-hidden="true"></canvas><span>Deploy</span></button>
+                <button class="dbtn" data-tone="blue" data-style="outline"><canvas aria-hidden="true"></canvas><span>Preview</span></button>
+                <button class="dbtn" data-tone="pink" data-style="ghost"><canvas aria-hidden="true"></canvas><span>Dismiss</span></button>
+              </div>
+              <figcaption><h3>Button</h3><p>The texture thickens on hover and press. Try it.</p><code>DitherButton · Button</code></figcaption>
+            </figure>
+            <figure class="spec">
+              <div class="stage center col">
+                <canvas data-demo="avatar" class="avatar" role="img" aria-label="Generated avatar"></canvas>
+                <input id="avatar-name" class="field" value="Ada Lovelace" aria-label="Name for the avatar" spellcheck="false">
+              </div>
+              <figcaption><h3>Avatar</h3><p>32 mirrored bits and 180 hues. Same name, same avatar, in Rust and here.</p><code>DitherAvatar · Avatar</code></figcaption>
+            </figure>
+            <figure class="spec">
+              <div class="stage gradients">
+                <canvas data-demo="grad" data-from="blue" data-to="purple" data-dir="up"></canvas>
+                <canvas data-demo="grad" data-from="orange" data-to="pink" data-dir="right"></canvas>
+                <canvas data-demo="grad" data-from="green" data-dir="up"></canvas>
+              </div>
+              <figcaption><h3>Gradient</h3><p>A two-tone blend or a one-tone fade.</p><code>DitherGradient · Gradient</code></figcaption>
+            </figure>
+            <figure class="spec wide">
+              <div class="stage bg"><canvas data-demo="bg" role="img" aria-label="Animated dithered background"></canvas>
+                <div class="seg" id="field-seg" role="group" aria-label="Field">
+                  <button aria-pressed="false" data-field="plasma">Plasma</button>
+                  <button aria-pressed="false" data-field="waves">Waves</button>
+                  <button aria-pressed="false" data-field="ripple">Ripple</button>
+                  <button aria-pressed="false" data-field="noise">Noise</button>
+                  <button aria-pressed="true" data-field="aurora">Aurora</button>
+                </div>
+              </div>
+              <figcaption><h3>Background</h3><p>Animated fields for heroes and empty states. They stop when the system asks for reduced motion.</p><code>DitherBackground · Background</code></figcaption>
+            </figure>
+            <figure class="spec wide">
+              <div class="stage pad meters">
+                <canvas data-demo="meter" data-fill="gradient" data-tone="purple"></canvas>
+                <canvas data-demo="meter" data-fill="dotted" data-tone="blue"></canvas>
+                <canvas data-demo="meter" data-fill="hatched" data-tone="orange"></canvas>
+              </div>
+              <figcaption><h3>Meter</h3><p>A progress bar in every fill style. Springs to new values on GPUI.</p><code>DitherMeter · Meter</code></figcaption>
+            </figure>
+          </div>
+        </section>
+
+        <section id="vocabulary">
+          <h2>Vocabulary</h2>
+          <p>Both frontends share a small set of types from <code>dither-core</code>.</p>
+          <h3 class="h4">Tone</h3>
+          <p>Seven named tones, or any hue. Each expands into a perceptual OKLCH ramp with <code>tone.shade(level)</code>.</p>
+          <div class="tones" id="tones"></div>
+          <h3 class="h4">Fill</h3>
+          <div class="fills" id="fills"></div>
+          <table>
+            <tr><td><code>Bloom</code></td><td><code>Off</code> <code>Low</code> <code>High</code> <code>Aura</code>: a dithered glow around lit pixels</td></tr>
+            <tr><td><code>Matrix</code></td><td><code>Bayer2</code> <code>Bayer4</code> <code>Bayer8</code> <code>Halftone</code> <code>Noise</code></td></tr>
+            <tr><td><code>Field</code></td><td><code>Plasma</code> <code>Waves</code> <code>Ripple</code> <code>Noise</code> <code>Aurora</code></td></tr>
+            <tr><td><code>Direction</code></td><td><code>Up</code> <code>Down</code> <code>Left</code> <code>Right</code> <code>Radial</code></td></tr>
+          </table>
+        </section>
+
+        <section id="motion">
+          <h2>Motion &amp; accessibility</h2>
+          <ul class="plain">
+            <li><strong>Motion.</strong> GPUI uses <a href="https://github.com/1bye/gpui-motion">gpui-motion-kit</a>: tween entrances, spring buttons and meters, a sliding tooltip, and a looping clock for backgrounds. All of it respects reduced motion.</li>
+            <li><strong>Buttons.</strong> <code>DitherButton</code> wraps the GPUI Kit <code>Button</code>. Focus, Tab order, Enter and Space, the focus ring and the disabled state come from Kit.</li>
+            <li><strong>Semantics.</strong> Charts are labelled figures, meters are progress indicators, and legend entries are focusable buttons.</li>
+            <li><strong>Theme.</strong> Axes, tooltips and legends use the active Kit theme tokens, in light and dark.</li>
+          </ul>
+        </section>
+
+        <section id="core">
+          <h2>The core</h2>
+          <p>Everything rasterizes into a <code>PixelGrid</code>. Paint its runs with any renderer: a game engine, an image encoder or a web canvas.</p>
+          <pre><code class="language-rust">use dither_core::*;
+
+let grid = Gradient::new(Tone::Blue).to(Tone::Purple).render(64, 32);
+
+for run in grid.runs() {
+    paint(run.x, run.y, run.len, run.color);
+}</code></pre>
+        </section>
+      </article>
+    </div>
+  </main>
+
+  <footer class="foot">
+    <div class="foot-inner">
+      <span>dither-kit-rs</span>
+      <span class="muted">Inspired by <a href="https://github.com/Boring-Software-Inc/dither-kit">dither-kit</a>. Built on <a href="https://gpui-kit.com">GPUI Kit</a> and <a href="https://ratatui.rs">Ratatui</a>.</span>
+    </div>
+  </footer>
+
+  <script src="dither.js"></script>
+</body>
+</html>

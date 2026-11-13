@@ -1,0 +1,8 @@
+[package]
+name = "dither-core"
+description = "Renderer-neutral ordered-dither engine: palettes, fills, charts, gradients, backgrounds, avatars."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]

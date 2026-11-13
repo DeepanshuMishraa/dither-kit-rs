@@ -1,0 +1,13 @@
+[package]
+name = "dither-ratatui"
+description = "Dithered charts, buttons, gradients and backgrounds for Ratatui terminal apps."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+dither-core.workspace = true
+ratatui = "0.30"
+
+[dev-dependencies]
+crossterm = "0.29"

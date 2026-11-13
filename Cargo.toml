@@ -1,0 +1,12 @@
+[workspace]
+resolver = "3"
+members = ["crates/dither-core", "crates/dither-gpui", "crates/dither-ratatui"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+# gpui-motion-kit 0.5 requires Rust 1.95.
+rust-version = "1.95"
+
+[workspace.dependencies]
+dither-core = { path = "crates/dither-core", version = "0.1.0" }
