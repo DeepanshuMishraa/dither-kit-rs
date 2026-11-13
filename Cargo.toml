@@ -7,6 +7,9 @@ version = "0.1.0"
 edition = "2024"
 # gpui-motion-kit 0.5 requires Rust 1.95.
 rust-version = "1.95"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DeepanshuMishraa/dither-kit-rs"
+homepage = "https://deepanshumishraa.github.io/dither-kit-rs/"
 
 [workspace.dependencies]
 dither-core = { path = "crates/dither-core", version = "0.1.0" }

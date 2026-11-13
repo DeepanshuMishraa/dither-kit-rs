@@ -259,3 +259,7 @@ The visual language is inspired by [dither-kit](https://github.com/Boring-Softwa
 by Boring Software Inc., which builds on Evil Charts. Motion is powered by
 [gpui-motion](https://github.com/1bye/gpui-motion). GPUI is by [Zed Industries](https://zed.dev),
 and GPUI Kit by [Longbridge](https://github.com/longbridge/gpui-kit).
+
+## License
+
+Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT license](LICENSE-MIT) at your option.

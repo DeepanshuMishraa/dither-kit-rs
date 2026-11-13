@@ -4,6 +4,12 @@ description = "Dithered charts, buttons, gradients and backgrounds for GPUI Kit 
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "../../README.md"
+keywords = ["dither", "gpui", "gui", "charts", "widgets"]
+categories = ["gui", "graphics", "visualization"]
 
 [dependencies]
 dither-core.workspace = true
