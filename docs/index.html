@@ -61,6 +61,7 @@
     <div class="doc">
       <aside class="toc" aria-label="On this page">
         <a href="#install">Installation</a>
+        <a href="#skill">Agent skill</a>
         <a href="#gpui">GPUI Kit</a>
         <a href="#ratatui">Ratatui</a>
         <a href="#components">Components</a>
@@ -83,15 +84,20 @@
 
         <section id="install">
           <h2>Installation</h2>
-          <p>Add the frontend you need from Git. The minimum supported Rust version is 1.95.</p>
-          <pre><code class="language-toml"># Desktop
-dither-gpui = { git = "https://github.com/DeepanshuMishraa/dither-kit-rs" }
-gpui-kit = "=0.7.3"
+          <p>Add the frontend you need. The minimum supported Rust version is 1.95.</p>
+          <pre><code class="language-sh"># Desktop
+cargo add dither-gpui gpui-kit@=0.7.3
 
 # Terminal
-dither-ratatui = { git = "https://github.com/DeepanshuMishraa/dither-kit-rs" }
-ratatui = "0.30"</code></pre>
+cargo add dither-ratatui ratatui@0.30</code></pre>
           <p class="note">GPUI Kit is pinned to 0.7.3, the release <a href="https://github.com/1bye/gpui-motion">gpui-motion-kit</a> 0.5 is built against.</p>
+        </section>
+
+        <section id="skill">
+          <h2>Agent skill</h2>
+          <p>Using a coding agent? Install the dither-kit-rs skill so Claude Code, Cursor, Codex and other agents know the components, builders and conventions.</p>
+          <pre class="cmd"><code class="language-sh">npx skills add DeepanshuMishraa/dither-kit-rs</code></pre>
+          <p class="note">The skill lives in <a href="https://github.com/DeepanshuMishraa/dither-kit-rs/blob/main/.agents/skills/dither-kit-rs/SKILL.md"><code>.agents/skills/dither-kit-rs/SKILL.md</code></a>.</p>
         </section>
 
         <section id="gpui">

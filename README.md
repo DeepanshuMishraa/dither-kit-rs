@@ -57,20 +57,25 @@ gradients do not have. dither-kit-rs brings the look of the React
 
 ## Installation
 
-The crates are not on crates.io yet. Depend on them from Git:
-
-```toml
-[dependencies]
+```sh
 # Desktop (GPUI Kit)
-dither-gpui = { git = "https://github.com/DeepanshuMishraa/dither-kit-rs" }
-gpui-kit = "=0.7.3"
+cargo add dither-gpui gpui-kit@=0.7.3
 
 # Terminal (Ratatui)
-dither-ratatui = { git = "https://github.com/DeepanshuMishraa/dither-kit-rs" }
-ratatui = "0.30"
+cargo add dither-ratatui ratatui@0.30
 ```
 
 The minimum supported Rust version is **1.95**, which `gpui-motion-kit` requires.
+
+## Agent skill
+
+dither-kit-rs ships an [agent skill](.agents/skills/dither-kit-rs/SKILL.md) that teaches coding
+agents (Claude Code, Cursor, Codex and others) the components, builders and conventions.
+Install it into your project with:
+
+```sh
+npx skills add DeepanshuMishraa/dither-kit-rs
+```
 
 ## Quick start: GPUI Kit
 
