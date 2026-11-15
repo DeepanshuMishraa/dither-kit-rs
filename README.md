@@ -3,7 +3,8 @@
 # dither-kit-rs
 
 **Ordered-dither charts, buttons, gradients and backgrounds for Rust UIs.**
-One rendering engine, two frontends: [GPUI Kit](https://gpui-kit.com) for native desktop apps and
+One rendering engine, three frontends: [GPUI Kit](https://gpui-kit.com) and
+[Rune](https://github.com/anomalyco/rune) for native desktop apps, and
 [Ratatui](https://ratatui.rs) for the terminal.
 
 [Documentation](https://deepanshumishraa.github.io/dither-kit-rs/) ·
@@ -39,6 +40,7 @@ gradients do not have. dither-kit-rs brings the look of the React
 | [`dither-core`](crates/dither-core) | Dithering engine: matrices, tones, fills, and the chart, gradient, background, button, avatar and meter rasterizers | nothing |
 | [`dither-gpui`](crates/dither-gpui) | GPUI Kit components | `gpui-kit =0.7.3`, `gpui-motion-kit 0.5` |
 | [`dither-ratatui`](crates/dither-ratatui) | Ratatui widgets | `ratatui 0.30` |
+| [`dither-rune`](crates/dither-rune) | Rune elements: meter, avatar, sparkline, gradient, background, charts | `rune` (git) |
 
 ## Components
 
@@ -65,7 +67,20 @@ cargo add dither-gpui gpui-kit@=0.7.3
 cargo add dither-ratatui ratatui@0.30
 ```
 
-The minimum supported Rust version is **1.95**, which `gpui-motion-kit` requires.
+```toml
+# Desktop (Rune). Rune is not on crates.io under its own name yet, so both
+# come from git.
+[dependencies]
+dither-rune = { git = "https://github.com/DeepanshuMishraa/dither-kit-rs" }
+rune = { git = "https://github.com/anomalyco/rune", rev = "30c564251a9c0e2687720a5b12c903af04d5f2b1" }
+```
+
+A Rune app also needs Rune's `[patch.crates-io]` entries (forks of `winit`, `parley_engine` and a
+few others) in its own workspace, as Rune's docs describe; patches do not carry over from a
+dependency.
+
+The minimum supported Rust version is **1.95**, which `gpui-motion-kit` requires. `dither-rune`
+needs **1.99.1**, which Rune requires; a plain `cargo build` at the root leaves it out.
 
 ## Agent skill
 
@@ -236,8 +251,10 @@ You also need a working Vulkan driver to open windows. See the
 ```sh
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+cargo test --workspace   # includes dither-rune, so needs Rust 1.99.1
 ```
+
+On an older toolchain, add `--exclude dither-rune` to the clippy and test commands.
 
 `crates/dither-gpui/tests/ui.rs` runs real components in a headless Kit window. It checks:
 

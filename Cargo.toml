@@ -1,6 +1,9 @@
 [workspace]
 resolver = "3"
-members = ["crates/dither-core", "crates/dither-gpui", "crates/dither-ratatui"]
+members = ["crates/dither-core", "crates/dither-gpui", "crates/dither-ratatui", "crates/dither-rune"]
+# dither-rune needs Rust 1.99.1 and a git dependency, so a plain `cargo build`
+# at the root leaves it out. Build it with `cargo build -p dither-rune`.
+default-members = ["crates/dither-core", "crates/dither-gpui", "crates/dither-ratatui"]
 
 [workspace.package]
 version = "0.1.0"
@@ -13,3 +16,13 @@ homepage = "https://deepanshumishraa.github.io/dither-kit-rs/"
 
 [workspace.dependencies]
 dither-core = { path = "crates/dither-core", version = "0.1.0" }
+
+
+# Rune (used by dither-rune) needs its own forks of these crates to resolve;
+# crates.io's parley_engine 0.12.0 lacks a feature Rune uses. Patches only
+# apply in the workspace being built, so an app using dither-rune adds Rune's
+# own [patch.crates-io] set. The GPUI and Ratatui crates' locked versions are
+# unchanged by these.
+[patch.crates-io]
+winit = { git = "https://github.com/anomalyco/rune", rev = "30c564251a9c0e2687720a5b12c903af04d5f2b1" }
+parley_engine = { git = "https://github.com/anomalyco/rune", rev = "30c564251a9c0e2687720a5b12c903af04d5f2b1" }

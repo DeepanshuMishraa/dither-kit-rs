@@ -1,0 +1,20 @@
+[package]
+name = "dither-rune"
+description = "Dithered meters, charts, gradients, avatars and backgrounds for Rune apps."
+version.workspace = true
+edition.workspace = true
+# Rune requires Rust 1.99.1, above the workspace's 1.95.
+rust-version = "1.99.1"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "../../README.md"
+keywords = ["dither", "rune", "gui", "charts", "widgets"]
+categories = ["gui", "graphics", "visualization"]
+# Rune is used from git: the `rune` name on crates.io belongs to an
+# unrelated project, and crates.io refuses git dependencies.
+publish = false
+
+[dependencies]
+dither-core.workspace = true
+rune = { git = "https://github.com/anomalyco/rune", rev = "30c564251a9c0e2687720a5b12c903af04d5f2b1", default-features = false }
