@@ -103,26 +103,69 @@ fn cached(id: u64, build: impl FnOnce() -> Shape) -> Shape {
 /// paints `build(columns, rows)` with `dot`-point pixels sized to its own
 /// layout. `inputs` must change whenever the picture should (values, tone,
 /// animation frame): the grid is rebuilt only then or when the size changes.
-/// On the first frame, before layout, it paints nothing.
+/// On the first frame, before layout, it paints nothing. Non-positive or
+/// non-finite `dot`, invalid layout sizes and overflowing grid sizes also paint nothing.
 pub fn canvas(key: &str, dot: f32, inputs: impl Hash, build: impl FnOnce(usize, usize) -> PixelGrid) -> El {
     let e = el().key(key).a11y_hidden();
     let Some([w, h]) = rune::memo::layout_size(key) else {
         return e;
     };
-    let (cols, rows) = ((w / dot).floor() as usize, (h / dot).floor() as usize);
-    if cols == 0 || rows == 0 {
+    let Some((cols, rows)) = canvas_dimensions(w, h, dot) else {
         return e;
-    }
+    };
     let mut hasher = DefaultHasher::new();
     (key, cols, rows, dot.to_bits()).hash(&mut hasher);
     inputs.hash(&mut hasher);
     e.shape(cached(hasher.finish(), || shape(&build(cols, rows), dot)))
 }
 
+fn canvas_dimensions(w: f32, h: f32, dot: f32) -> Option<(usize, usize)> {
+    if !dot.is_finite() || dot <= 0.0 || !w.is_finite() || !h.is_finite() {
+        return None;
+    }
+    let (cols, rows) = ((w / dot).floor(), (h / dot).floor());
+    if cols < 1.0 || rows < 1.0 || cols >= usize::MAX as f32 || rows >= usize::MAX as f32 {
+        return None;
+    }
+    let (cols, rows) = (cols as usize, rows as usize);
+    // Reject overflow before the caller can allocate a PixelGrid.
+    let bytes = cols.checked_mul(rows)?.checked_mul(std::mem::size_of::<Rgba>())?;
+    (bytes <= isize::MAX as usize).then_some((cols, rows))
+}
+
+fn progress_key(value: f32) -> u32 {
+    value.clamp(0.0, 1.0).to_bits()
+}
+
+/// Hash sample bits without allocating a temporary copy on cache hits.
+struct SampleBits<'a>(&'a [f64]);
+
+impl Hash for SampleBits<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.len().hash(state);
+        for value in self.0 {
+            value.to_bits().hash(state);
+        }
+    }
+}
+
+fn background_time(frame: u64, fps: f32) -> f32 {
+    if fps.is_finite() && fps > 0.0 {
+        frame as f32 / fps
+    } else {
+        0.0
+    }
+}
+
 /// The animation frame for `time` seconds at `fps`, for a background's
-/// inputs, so the grid changes only that often.
+/// inputs, so the grid changes only that often. Non-positive and non-finite
+/// rates pause at frame zero.
 pub fn frame(time: f64, fps: f32) -> u64 {
-    (time * f64::from(fps)).max(0.0) as u64
+    if fps.is_finite() && fps > 0.0 {
+        (time * f64::from(fps)).max(0.0) as u64
+    } else {
+        0
+    }
 }
 
 fn tone_key(t: Tone) -> (u8, u32) {
@@ -135,7 +178,7 @@ fn tone_key(t: Tone) -> (u8, u32) {
 /// A dithered meter filling its element: dense up to `value` (0..1) with an
 /// intensity that rises to the leading edge, a faint hatch after it.
 pub fn meter(key: &str, dot: f32, value: f32, tone: Tone, fill: Fill) -> El {
-    let v = (value.clamp(0.0, 1.0) * 1000.0) as u32;
+    let v = progress_key(value);
     canvas(key, dot, (v, tone_key(tone), fill as u8), |w, h| {
         dither_core::meter(w, h, value, tone, fill)
     })
@@ -156,8 +199,8 @@ pub fn avatar(name: &str, size: f32, hue: Option<f32>) -> El {
 /// A chrome-free dithered area sparkline of `values`, drawn in to
 /// `progress` (0..1).
 pub fn sparkline(key: &str, dot: f32, values: &[f64], tone: Tone, progress: f32) -> El {
-    let bits: Vec<u64> = values.iter().map(|v| v.to_bits()).collect();
-    let p = (progress.clamp(0.0, 1.0) * 1000.0) as u32;
+    let bits = SampleBits(values);
+    let p = progress_key(progress);
     canvas(key, dot, (bits, tone_key(tone), p), |w, h| {
         dither_core::sparkline(values, tone, w, h, false, progress)
     })
@@ -176,19 +219,25 @@ pub fn gradient(key: &str, dot: f32, spec: Gradient) -> El {
 }
 
 /// A dithered field (plasma, waves, ripple, noise or aurora) at animation
-/// `frame` of `fps`. Keep the density low behind text.
+/// `frame` of `fps`. Positive rates below 1 are supported; non-positive or
+/// non-finite rates show time zero. Keep the density low behind text.
 pub fn background(key: &str, dot: f32, spec: Background, frame: u64, fps: f32) -> El {
-    let inputs = (
+    let inputs = background_inputs(spec, frame, fps);
+    canvas(key, dot, inputs, |w, h| {
+        spec.render(w, h, background_time(frame, fps))
+    })
+}
+
+fn background_inputs(spec: Background, frame: u64, fps: f32) -> impl Hash {
+    (
         spec.field as u8,
         tone_key(spec.tone),
         spec.accent.map(tone_key),
         spec.matrix as u8,
         spec.density.to_bits(),
+        background_time(frame, fps).to_bits(),
         frame,
-    );
-    canvas(key, dot, inputs, |w, h| {
-        spec.render(w, h, frame as f32 / fps.max(1.0))
-    })
+    )
 }
 
 /// Any other dither-core picture (a pie, radar or cartesian chart) sized to
@@ -234,5 +283,82 @@ mod tests {
         assert_eq!(frame(0.0, 12.0), 0);
         assert_eq!(frame(1.0, 12.0), 12);
         assert_eq!(frame(-1.0, 12.0), 0);
+    }
+
+    fn digest(value: impl Hash) -> u64 {
+        let mut h = DefaultHasher::new();
+        value.hash(&mut h);
+        h.finish()
+    }
+
+    #[test]
+    fn canvas_rejects_invalid_pixel_sizes_and_dimensions() {
+        for dot in [
+            0.0,
+            -1.0,
+            f32::NAN,
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+            f32::MIN_POSITIVE,
+        ] {
+            assert_eq!(canvas_dimensions(100.0, 100.0, dot), None, "dot={dot}");
+        }
+        for size in [0.0, -1.0, f32::NAN, f32::INFINITY] {
+            assert_eq!(canvas_dimensions(size, 100.0, 3.0), None);
+            assert_eq!(canvas_dimensions(100.0, size, 3.0), None);
+        }
+        assert_eq!(canvas_dimensions(10.0, 8.0, 3.0), Some((3, 2)));
+    }
+
+    #[test]
+    fn progress_cache_keys_distinguish_different_rasterizations() {
+        let (a, b) = (0.5001, 0.5009);
+        assert_ne!(
+            dither_core::meter(4096, 2, a, Tone::Blue, Fill::Solid),
+            dither_core::meter(4096, 2, b, Tone::Blue, Fill::Solid)
+        );
+        assert_ne!(
+            dither_core::sparkline(&[1.0, 3.0, 2.0], Tone::Blue, 4096, 8, false, a),
+            dither_core::sparkline(&[1.0, 3.0, 2.0], Tone::Blue, 4096, 8, false, b)
+        );
+        assert_ne!(progress_key(a), progress_key(b));
+        assert_eq!(progress_key(-1.0), progress_key(0.0));
+        assert_eq!(progress_key(2.0), progress_key(1.0));
+    }
+
+    #[test]
+    fn background_respects_sub_one_fps_and_pauses_invalid_rates() {
+        assert_eq!(frame(8.0, 0.5), 4);
+        assert_eq!(background_time(4, 0.5), 8.0);
+        assert_eq!(background_time(4, 2.0), 2.0);
+        for fps in [0.0, -1.0, f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            assert_eq!(background_time(4, fps), 0.0);
+            assert_eq!(frame(8.0, fps), 0);
+        }
+    }
+
+    #[test]
+    fn background_cache_invalidates_when_frame_rate_changes() {
+        assert_ne!(
+            digest(background_inputs(
+                Background::new(Field::Plasma, Tone::Blue),
+                4,
+                0.5
+            )),
+            digest(background_inputs(
+                Background::new(Field::Plasma, Tone::Blue),
+                4,
+                2.0
+            ))
+        );
+    }
+
+    #[test]
+    fn borrowed_sample_hash_preserves_bits_and_sequence_boundaries() {
+        let samples = [0.0, -0.0, 1.5, f64::from_bits(0x7ff8000000000001)];
+        let owned: Vec<u64> = samples.iter().map(|v| v.to_bits()).collect();
+        assert_eq!(digest(SampleBits(&samples)), digest(owned));
+        assert_ne!(digest(SampleBits(&[0.0])), digest(SampleBits(&[-0.0])));
+        assert_ne!(digest(SampleBits(&samples)), digest(SampleBits(&samples[..3])));
     }
 }

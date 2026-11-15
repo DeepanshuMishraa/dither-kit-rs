@@ -45,18 +45,22 @@ gradients do not have. dither-kit-rs brings the look of the React
 
 ## Components
 
-| Component | GPUI | Ratatui | Notes |
-| --- | --- | --- | --- |
-| Area / line / bar chart | `DitherChart` | `Chart` | Stacking, crosshair, tooltip, clickable legend, entrance animation |
-| Pie / donut | `DitherPie` | `PieChart` | Hover lift, centre total, gaps between slices |
-| Radar | `DitherRadar` | `RadarChart` | Rings, spokes, axis labels, series selection |
-| Sparkline | `DitherSparkline` | `Sparkline` | Chrome-free, glows on hover |
-| Button | `DitherButton` | `Button` + `ButtonState` | Texture thickens on hover and press; sparkles |
-| Avatar | `DitherAvatar` | `Avatar` | 8×8 mirrored identicon from a name; about 1.5 trillion variations |
-| Gradient | `DitherGradient` | `Gradient` | One-tone fade or two-tone blend; up, down, left, right or radial |
-| Background | `DitherBackground` | `Background` | Animated plasma, waves, ripple, noise, aurora |
-| Meter | `DitherMeter` | `Meter` | Progress bar; springs to new values on GPUI |
-| Legend | `legend()` | `Legend` | Built into charts; also usable on its own |
+| Component | GPUI | Ratatui | Rune | Notes |
+| --- | --- | --- | --- | --- |
+| Area / line / bar chart | `DitherChart` | `Chart` | `chart` + `Cartesian` | Stacking, crosshair, tooltip, clickable legend, entrance animation |
+| Pie / donut | `DitherPie` | `PieChart` | `chart` + `Pie` | Hover lift, centre total, gaps between slices |
+| Radar | `DitherRadar` | `RadarChart` | `chart` + `Radar` | Rings, spokes, axis labels, series selection |
+| Sparkline | `DitherSparkline` | `Sparkline` | `sparkline` | Chrome-free, glows on hover |
+| Button | `DitherButton` | `Button` + `ButtonState` | — | Texture thickens on hover and press; sparkles |
+| Avatar | `DitherAvatar` | `Avatar` | `avatar` | 8×8 mirrored identicon from a name; about 1.5 trillion variations |
+| Gradient | `DitherGradient` | `Gradient` | `gradient` | One-tone fade or two-tone blend; up, down, left, right or radial |
+| Background | `DitherBackground` | `Background` | `background` + `frame` | Animated plasma, waves, ripple, noise, aurora |
+| Meter | `DitherMeter` | `Meter` | `meter` | Progress bar; springs to new values on GPUI |
+| Legend | `legend()` | `Legend` | — | Built into charts; also usable on its own |
+
+The Rune helpers paint the rasterized picture; applications provide chart labels, hover
+handling, legends and animation scheduling. The Notes column describes capabilities across
+frontends, rather than built-in chrome in every frontend.
 
 ## Installation
 
@@ -274,7 +278,8 @@ Pixel screenshots in Kit tests are macOS-only, so check the desktop visuals by r
 dither-core      PixelGrid ← rasterizers (charts, gradient, background, button, avatar, meter)
    │                ↑ Matrix thresholds, Tone ramps, Fill, Bloom
    ├── dither-gpui      canvas → paint_quad per horizontal run; Kit theme, gpui-motion-kit
-   └── dither-ratatui   ▀/▄ half blocks, two pixels per cell; alpha blended over cell bg
+   ├── dither-ratatui   ▀/▄ half blocks, two pixels per cell; alpha blended over cell bg
+   └── dither-rune      canvas → Shape rectangle per horizontal run; cached by size and inputs
 ```
 
 ## Credits
