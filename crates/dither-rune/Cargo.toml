@@ -18,3 +18,7 @@ publish = false
 [dependencies]
 dither-core.workspace = true
 rune = { git = "https://github.com/anomalyco/rune", rev = "30c564251a9c0e2687720a5b12c903af04d5f2b1", default-features = false }
+
+[dev-dependencies]
+# The gallery example opens a window, so it needs Rune's default features.
+rune = { git = "https://github.com/anomalyco/rune", rev = "30c564251a9c0e2687720a5b12c903af04d5f2b1" }

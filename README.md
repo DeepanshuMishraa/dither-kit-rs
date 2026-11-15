@@ -9,7 +9,8 @@ One rendering engine, three frontends: [GPUI Kit](https://gpui-kit.com) and
 
 [Documentation](https://deepanshumishraa.github.io/dither-kit-rs/) ·
 [GPUI gallery](crates/dither-gpui/examples/gallery.rs) ·
-[Terminal gallery](crates/dither-ratatui/examples/gallery.rs)
+[Terminal gallery](crates/dither-ratatui/examples/gallery.rs) ·
+[Rune gallery](crates/dither-rune/examples/gallery.rs)
 
 ![Every dither-kit-rs surface, rendered from the core engine](assets/preview.png)
 
@@ -217,6 +218,7 @@ for run in grid.runs() {
 ```sh
 cargo run -p dither-gpui    --example gallery   # desktop gallery
 cargo run -p dither-ratatui --example gallery   # terminal gallery (mouse + keyboard)
+cargo run -p dither-rune    --example gallery   # Rune gallery (Rust 1.99.1)
 cargo run -p dither-core    --example preview -- out.ppm
 ```
 
