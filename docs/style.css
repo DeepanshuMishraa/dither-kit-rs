@@ -298,6 +298,14 @@ ul.plain { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 14
 ul.plain li { color: var(--muted); padding-left: 18px; position: relative; }
 ul.plain li::before { content: ""; position: absolute; left: 0; top: .7em; width: 6px; height: 6px; background: var(--faint); }
 
+.steps { counter-reset: guide-step; list-style: none; padding: 0; margin: 20px 0 0; display: grid; gap: 18px; }
+.steps li { counter-increment: guide-step; position: relative; padding: 0 0 0 42px; color: var(--muted); }
+.steps li::before {
+  content: counter(guide-step, decimal-leading-zero); position: absolute; left: 0; top: 1px;
+  color: var(--accent); font: 500 12px/1.8 var(--mono); font-variant-numeric: tabular-nums;
+}
+.steps strong { color: var(--fg); font-weight: 500; }
+
 .foot { margin-top: 64px; border-top: 1px solid var(--line); }
 .foot-inner { max-width: 1080px; margin: 0 auto; padding: 32px 24px 48px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: 13px; }
 .muted { color: var(--muted); }

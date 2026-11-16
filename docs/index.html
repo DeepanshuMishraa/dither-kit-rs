@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=18d1825">
+  <link rel="stylesheet" href="style.css?v=agent-guide-1">
 </head>
 <body>
   <header class="top">
@@ -64,8 +64,11 @@
 
     <div class="doc">
       <aside class="toc" aria-label="On this page">
-        <a href="#install">Installation</a>
-        <a href="#skill">Agent skill</a>
+        <a href="#install">Install with an agent</a>
+        <a href="#choose">Choose a frontend</a>
+        <a href="#dependencies">Dependency reference</a>
+        <a href="#workflow">Integration workflow</a>
+        <a href="#patterns">Integration patterns</a>
         <a href="#gpui">GPUI Kit</a>
         <a href="#ratatui">Ratatui</a>
         <a href="#rune">Rune</a>
@@ -88,13 +91,34 @@
         </section>
 
         <section id="install">
-          <h2>Installation</h2>
-          <p>Add the frontend you need. The minimum supported Rust version is 1.95.</p>
-          <pre><code class="language-sh"># Desktop
-cargo add dither-gpui gpui-kit@=0.7.3
+          <h2>Install with an agent</h2>
+          <p>Give your coding agent this prompt to inspect the project, select the matching package, add dependencies correctly, and integrate dither-kit-rs in context.</p>
+          <pre><code>Read the dither-kit-rs agent guide at https://deepanshumishraa.github.io/dither-kit-rs/ and its linked skill reference before making changes.
 
-# Terminal
-cargo add dither-ratatui ratatui@0.30</code></pre>
+First inspect this repository: identify its Rust framework, workspace layout, MSRV, existing design conventions, and the screen or component that should use dithering. Do not assume the app uses GPUI, Ratatui, or Rune; choose the frontend that matches the code already here. If none fits, use dither-core and adapt its PixelGrid to the existing renderer.
+
+Install the required dither-kit-rs dependencies in the correct Cargo.toml for this workspace. Respect the frontend-specific Rust version, version pins, platform libraries, and Rune Git patches in the guide. Then integrate an appropriate component into the relevant feature, not as an unrelated demo. Use realistic app data, stable unique IDs where required, and the existing theme and interaction patterns. Keep changes focused and avoid replacing the app's architecture.
+
+Then review the resulting code for correct imports, ownership, state handling, responsive sizing, accessibility, and reduced-motion behavior where applicable. Run the repository's relevant formatting, build, lint, or tests if available. Fix issues caused by the integration. Finish with a concise summary of files changed, dependency/setup changes, checks performed, and anything the app owner still needs to decide.</code></pre>
+          <p class="note">For repository-specific implementation details, builders, and caveats, the agent should read the <a href="https://github.com/DeepanshuMishraa/dither-kit-rs/blob/main/.agents/skills/dither-kit-rs/SKILL.md">dither-kit-rs skill</a> before coding.</p>
+        </section>
+
+        <section id="choose">
+          <h2>Choose a frontend</h2>
+          <p>Start with the UI toolkit already used by the application. The frontends share the same rasterization core but expose native components for different environments.</p>
+          <table>
+            <tr><td><strong>GPUI Kit</strong></td><td>Native desktop app already built with GPUI Kit. Use <code>dither-gpui</code>.</td></tr>
+            <tr><td><strong>Ratatui</strong></td><td>Terminal user interface. Use <code>dither-ratatui</code> and confirm truecolor support.</td></tr>
+            <tr><td><strong>Rune</strong></td><td>Native app built with Rune. Use <code>dither-rune</code> and its pinned Git setup.</td></tr>
+            <tr><td><strong>Other renderer</strong></td><td>Use <code>dither-core</code>; paint each <code>PixelGrid</code> run in the host renderer.</td></tr>
+          </table>
+          <p class="note">Do not add multiple frontends unless the app genuinely targets multiple UI environments. The GPUI and Ratatui crates re-export the core vocabulary.</p>
+        </section>
+
+        <section id="dependencies">
+          <h2>Dependency reference</h2>
+          <p>Dependency manifests are reference material for humans and agents. The minimum supported Rust version is 1.95, except <code>dither-rune</code>, which needs 1.99.1 or newer.</p>
+          <p>For a GPUI Kit app, add <code>dither-gpui</code> and pin <code>gpui-kit</code> to exactly <code>=0.7.3</code>. For a Ratatui app, add <code>dither-ratatui</code> with Ratatui <code>0.30</code>. For another renderer, add <code>dither-core</code>.</p>
           <p class="note">GPUI Kit is pinned to 0.7.3, the release <a href="https://github.com/1bye/gpui-motion">gpui-motion-kit</a> 0.5 is built against.</p>
           <h3>Rune (Git)</h3>
           <p><code>dither-rune</code> follows Rune's pinned development revision. Add both Git dependencies to your app, then add Rune's five crate patches to the app workspace root. Keep the same revision on every entry; Cargo does not inherit patches from dependencies.</p>
@@ -111,11 +135,38 @@ accesskit_macos = { git = "https://github.com/anomalyco/rune", rev = "30c564251a
           <p class="note">Requires Rust 1.99.1 or newer. Rune is Git-only at this revision, so <code>dither-rune</code> is not currently installable from crates.io. Read Rune's <a href="https://github.com/anomalyco/rune/blob/30c564251a9c0e2687720a5b12c903af04d5f2b1/crates/rune/README.md#depending-on-rune">dependency and setup guide</a> and browse its <a href="https://github.com/anomalyco/rune/tree/30c564251a9c0e2687720a5b12c903af04d5f2b1/examples/hello">hello example</a>. Linux builds need <code>libxkbcommon-dev</code> and <code>libwayland-dev</code>.</p>
         </section>
 
-        <section id="skill">
-          <h2>Agent skill</h2>
-          <p>Using a coding agent? Install the dither-kit-rs skill so Claude Code, Cursor, Codex and other agents know the components, builders and conventions.</p>
-          <pre class="cmd"><code class="language-sh">npx skills add DeepanshuMishraa/dither-kit-rs</code></pre>
-          <p class="note">The skill lives in <a href="https://github.com/DeepanshuMishraa/dither-kit-rs/blob/main/.agents/skills/dither-kit-rs/SKILL.md"><code>.agents/skills/dither-kit-rs/SKILL.md</code></a>.</p>
+        <section id="workflow">
+          <h2>Agent integration workflow</h2>
+          <p>A good integration starts from the host app and its actual constraints. Use this sequence whether you are implementing by hand or asking an agent.</p>
+          <ol class="steps">
+            <li><strong>Inspect the app.</strong> Locate its workspace manifest, UI entry point, existing component patterns, theme, state model, and supported Rust version.</li>
+            <li><strong>Choose one frontend.</strong> Match the toolkit in use. If no frontend fits, use the core renderer-neutral API.</li>
+            <li><strong>Choose a component for the job.</strong> Charts communicate data; meters show progress; gradients and backgrounds add texture; avatars provide deterministic identity; buttons add an interactive action.</li>
+            <li><strong>Integrate in context.</strong> Preserve the app's layout and conventions. Supply meaningful data, stable GPUI IDs, and host-owned interaction state where the frontend expects it.</li>
+            <li><strong>Review and report.</strong> Check dependency constraints, compile the affected target, follow existing tests and accessibility patterns, then explain setup changes and validation.</li>
+          </ol>
+          <p class="note">For agents: consult the skill's frontend reference before selecting constructors or builders. If framework details are unclear, inspect the app's existing examples and dependency versions first.</p>
+        </section>
+
+        <section id="patterns">
+          <h2>Integration patterns</h2>
+          <h3 class="h4">Keep the renderer native</h3>
+          <p>The library paints pixels, while the host UI keeps its normal text, layout, focus, and event handling. Combine a dithered chart or meter with native labels instead of baking the entire interface into a bitmap.</p>
+          <h3 class="h4">Use stable and meaningful inputs</h3>
+          <p>Choose tones and fills that match the app's existing palette. Give stateful GPUI components unique stable IDs. For Rune cached elements, pass every rasterization input into the cache key so updated data cannot reuse stale pixels.</p>
+          <h3 class="h4">Respect frontend state ownership</h3>
+          <p>GPUI components keep interaction state in keyed element state. Ratatui widgets are values and the application owns hover, selection, and animation progress. Rune helpers paint elements while the application owns chart chrome, hit handling, and redraw scheduling.</p>
+        </section>
+
+        <section id="troubleshooting">
+          <h2>Setup and troubleshooting</h2>
+          <ul class="plain">
+            <li><strong>Dependency resolution fails.</strong> Check the app's Rust version and preserve the GPUI Kit exact pin. Rune requires the same pinned Git revision for Rune, <code>dither-rune</code> compatibility patches, and related crates.</li>
+            <li><strong>Linux desktop build fails.</strong> GPUI needs <code>libfontconfig-dev</code>, <code>libwayland-dev</code>, <code>libxkbcommon-x11-dev</code>, <code>libx11-xcb-dev</code>, and a working Vulkan driver. Rune needs <code>libxkbcommon-dev</code> and <code>libwayland-dev</code>.</li>
+            <li><strong>Terminal colors look muted.</strong> Run Ratatui in a truecolor terminal; the renderer uses foreground and background colors to represent two pixels per cell.</li>
+            <li><strong>Rune element is blank initially.</strong> Its canvas sizes the grid after layout. Allow a subsequent frame and schedule redraws when inputs or animation frames change.</li>
+            <li><strong>Animation keeps using CPU.</strong> Stop scheduling frames when animation is unnecessary and respect reduced-motion preferences in the host app.</li>
+          </ul>
         </section>
 
         <section id="gpui">
@@ -278,7 +329,7 @@ for run in grid.runs() {
     </div>
   </footer>
 
-  <script src="dither.js?v=18d1825"></script>
-  <script src="stars.js?v=18d1825"></script>
+  <script src="dither.js?v=agent-guide-1"></script>
+  <script src="stars.js?v=agent-guide-1"></script>
 </body>
 </html>
