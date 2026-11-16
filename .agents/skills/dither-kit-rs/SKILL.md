@@ -1,6 +1,6 @@
 ---
 name: dither-kit-rs
-description: Build ordered-dither charts, buttons, gradients, animated backgrounds, avatars and meters in Rust UIs with dither-kit-rs. Use when a Rust project depends on (or should depend on) dither-core, dither-gpui or dither-ratatui, or when the user asks for dithered / pixel / retro-textured charts or components in GPUI Kit desktop apps or Ratatui terminal apps.
+description: Build ordered-dither charts, buttons, gradients, animated backgrounds, avatars and meters in Rust UIs with dither-kit-rs. Use when a Rust project depends on (or should depend on) dither-core, dither-gpui, dither-ratatui or dither-rune, or when the user asks for dithered / pixel / retro-textured components in GPUI Kit, Rune or Ratatui apps.
 ---
 
 # dither-kit-rs
@@ -12,6 +12,7 @@ two thin frontends paint it:
 | --- | --- | --- |
 | `dither-gpui` | GPUI Kit desktop apps | `cargo add dither-gpui gpui-kit@=0.7.3` |
 | `dither-ratatui` | Ratatui terminal apps | `cargo add dither-ratatui ratatui@0.30` |
+| `dither-rune` | Rune native desktop apps | Git dependency; see [Rune setup](#rune) |
 | `dither-core` | Any other renderer (game engine, image encoder, canvas) | `cargo add dither-core` |
 
 Rules that matter:
@@ -21,6 +22,39 @@ Rules that matter:
 - `dither-ratatui` needs a **truecolor terminal**. Each cell holds two square pixels (`▀`/`▄` half blocks).
 - Both frontends re-export the core as `dither_core`; do not add `dither-core` separately unless you use it directly.
 - On Linux, GPUI needs `libfontconfig-dev libwayland-dev libxkbcommon-x11-dev libx11-xcb-dev libvulkan1` and a Vulkan driver.
+
+## Rune (`dither-rune`)
+
+`dither-rune` paints `dither-core`'s `PixelGrid` as Rune shapes, one rectangle per
+horizontal run of equal pixels. Rune is Git-only at the pinned revision below, so
+keep `dither-rune`, `rune`, and Rune's patch crates on that same revision. Cargo
+patches belong in the application workspace root; patches in a dependency are not
+inherited. This frontend requires Rust **1.99.1+** (the rest of this workspace uses
+1.95) and Linux builds need `libxkbcommon-dev libwayland-dev`.
+
+```toml
+[dependencies]
+dither-rune = { git = "https://github.com/DeepanshuMishraa/dither-kit-rs", package = "dither-rune" }
+rune = { git = "https://github.com/anomalyco/rune", rev = "30c564251a9c0e2687720a5b12c903af04d5f2b1" }
+
+[patch.crates-io]
+winit = { git = "https://github.com/anomalyco/rune", rev = "30c564251a9c0e2687720a5b12c903af04d5f2b1" }
+parley_engine = { git = "https://github.com/anomalyco/rune", rev = "30c564251a9c0e2687720a5b12c903af04d5f2b1" }
+wgpu-hal = { git = "https://github.com/anomalyco/rune", rev = "30c564251a9c0e2687720a5b12c903af04d5f2b1" }
+accesskit_windows = { git = "https://github.com/anomalyco/rune", rev = "30c564251a9c0e2687720a5b12c903af04d5f2b1" }
+accesskit_macos = { git = "https://github.com/anomalyco/rune", rev = "30c564251a9c0e2687720a5b12c903af04d5f2b1" }
+```
+
+Rune helpers return elements: `canvas`, `pixels`, `meter`, `avatar`, `sparkline`,
+`gradient`, `background` and `chart`. For cached elements use a stable key and pass
+every rasterization input (including animated frame) as the inputs value. `canvas`
+sizes the grid to Rune's laid-out element size; it paints nothing before layout, so
+allow a subsequent frame. The app owns labels, legends, hit handling and redraw
+scheduling. For backgrounds, derive a bounded frame with `dither_rune::frame(time,
+fps)` and use it as an input to `background`; schedule modest redraws and stop when
+reduced motion is enabled. See the [Rune gallery](https://github.com/DeepanshuMishraa/dither-kit-rs/blob/main/crates/dither-rune/examples/gallery.rs),
+[Rune dependency setup](https://github.com/anomalyco/rune/blob/30c564251a9c0e2687720a5b12c903af04d5f2b1/crates/rune/README.md#depending-on-rune)
+and [Rune hello example](https://github.com/anomalyco/rune/tree/30c564251a9c0e2687720a5b12c903af04d5f2b1/examples/hello).
 
 ## Shared vocabulary (`dither_core`, in both preludes)
 
