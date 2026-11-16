@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>dither-kit-rs</title>
-  <meta name="description" content="Ordered-dither charts, buttons, gradients and backgrounds for GPUI and Ratatui. One engine, identical pixels everywhere.">
+  <meta name="description" content="Ordered-dither charts, buttons, gradients and backgrounds for GPUI, Rune and Ratatui. One engine, identical pixels everywhere.">
   <meta name="theme-color" content="#0b0b0c" media="(prefers-color-scheme: dark)">
   <meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
   <meta property="og:title" content="dither-kit-rs">
-  <meta property="og:description" content="Dithered interfaces for Rust: GPUI and Ratatui.">
+  <meta property="og:description" content="Dithered interfaces for Rust: GPUI, Rune and Ratatui.">
   <meta property="og:image" content="preview.png">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -35,7 +35,7 @@
 
   <main>
     <section class="hero">
-      <p class="eyebrow">GPUI Kit · Ratatui · Rust</p>
+      <p class="eyebrow">GPUI Kit · Rune · Ratatui · Rust</p>
       <h1>Dithered interfaces<br>for Rust.</h1>
       <p class="lede">Charts, buttons, gradients and backgrounds built from ordered dither.
         One engine draws the same pixels on the desktop and in the terminal.</p>
@@ -68,6 +68,7 @@
         <a href="#skill">Agent skill</a>
         <a href="#gpui">GPUI Kit</a>
         <a href="#ratatui">Ratatui</a>
+        <a href="#rune">Rune</a>
         <a href="#components">Components</a>
         <a href="#vocabulary">Vocabulary</a>
         <a href="#motion">Motion &amp; access</a>
@@ -78,7 +79,7 @@
         <section id="intro">
           <p class="big">Dithering turns smooth values into patterns of lit and unlit pixels.
             It is an old print technique that gives interfaces a crisp, tactile texture.
-            dither-kit-rs brings it to native Rust UIs.</p>
+            dither-kit-rs brings it to native Rust UIs and terminal apps.</p>
           <dl class="facts">
             <div><dt>Deterministic</dt><dd>Ordered Bayer thresholds are stateless per pixel. Nothing shimmers while animating.</dd></div>
             <div><dt>Native</dt><dd>GPU quads in GPUI. Half-block glyphs in the terminal. Text stays real text.</dd></div>
@@ -95,6 +96,19 @@ cargo add dither-gpui gpui-kit@=0.7.3
 # Terminal
 cargo add dither-ratatui ratatui@0.30</code></pre>
           <p class="note">GPUI Kit is pinned to 0.7.3, the release <a href="https://github.com/1bye/gpui-motion">gpui-motion-kit</a> 0.5 is built against.</p>
+          <h3>Rune (Git)</h3>
+          <p><code>dither-rune</code> follows Rune's pinned development revision. Add both Git dependencies to your app, then add Rune's five crate patches to the app workspace root. Keep the same revision on every entry; Cargo does not inherit patches from dependencies.</p>
+          <pre><code class="language-toml">[dependencies]
+dither-rune = { git = "https://github.com/DeepanshuMishraa/dither-kit-rs", package = "dither-rune" }
+rune = { git = "https://github.com/anomalyco/rune", rev = "30c564251a9c0e2687720a5b12c903af04d5f2b1" }
+
+[patch.crates-io]
+winit = { git = "https://github.com/anomalyco/rune", rev = "30c564251a9c0e2687720a5b12c903af04d5f2b1" }
+parley_engine = { git = "https://github.com/anomalyco/rune", rev = "30c564251a9c0e2687720a5b12c903af04d5f2b1" }
+wgpu-hal = { git = "https://github.com/anomalyco/rune", rev = "30c564251a9c0e2687720a5b12c903af04d5f2b1" }
+accesskit_windows = { git = "https://github.com/anomalyco/rune", rev = "30c564251a9c0e2687720a5b12c903af04d5f2b1" }
+accesskit_macos = { git = "https://github.com/anomalyco/rune", rev = "30c564251a9c0e2687720a5b12c903af04d5f2b1" }</code></pre>
+          <p class="note">Requires Rust 1.99.1 or newer. Rune is Git-only at this revision, so <code>dither-rune</code> is not currently installable from crates.io. Read Rune's <a href="https://github.com/anomalyco/rune/blob/30c564251a9c0e2687720a5b12c903af04d5f2b1/crates/rune/README.md#depending-on-rune">dependency and setup guide</a> and browse its <a href="https://github.com/anomalyco/rune/tree/30c564251a9c0e2687720a5b12c903af04d5f2b1/examples/hello">hello example</a>. Linux builds need <code>libxkbcommon-dev</code> and <code>libwayland-dev</code>.</p>
         </section>
 
         <section id="skill">
@@ -136,9 +150,23 @@ frame.render_widget(chart, area);</code></pre>
           <p class="note">Requires a truecolor terminal.</p>
         </section>
 
+        <section id="rune">
+          <h2>Rune</h2>
+          <p><code>dither-rune</code> exposes small helpers that return Rune elements. The helpers rasterize into a <code>PixelGrid</code> and paint horizontal runs as Rune shapes; your app owns chart labels, legends, interaction and redraw scheduling.</p>
+          <pre><code class="language-rust">use dither_rune::{Cartesian, CartesianKind, Fill, Series, Tone};
+
+let series = vec![Series::new("Desktop", Tone::Blue, vec![186., 305., 237.])];
+let chart = dither_rune::chart("visitors", 3.0, "visitors-data", |w, h| {
+    Cartesian::new(CartesianKind::Area, &amp;series).render(w, h)
+});
+let meter = dither_rune::meter("build-progress", 3.0, 0.72, Tone::Green, Fill::Gradient);</code></pre>
+          <p>Other helpers are <code>avatar</code>, <code>sparkline</code>, <code>gradient</code> and <code>background</code>. Give cached elements stable keys and pass the rasterization inputs as the cache key. For an animated background, derive a frame using <code>dither_rune::frame(time, fps)</code> and schedule redraws at a modest rate.</p>
+          <p class="note">See the complete <a href="https://github.com/DeepanshuMishraa/dither-kit-rs/blob/main/crates/dither-rune/examples/gallery.rs">dither-rune gallery</a> and the upstream <a href="https://github.com/anomalyco/rune/blob/30c564251a9c0e2687720a5b12c903af04d5f2b1/crates/rune/README.md">Rune API guide</a>. From this repository, run <code>cargo run -p dither-rune --example gallery</code> with Rust 1.99.1+.</p>
+        </section>
+
         <section id="components">
           <h2>Components</h2>
-          <p>Each one exists in both frontends. These demos run on a JavaScript port of the core, so they are the same pixels the crates draw.</p>
+          <p>These demos run on a JavaScript port of the core, so they show the same pixels the Rust crates draw.</p>
 
           <div class="specimens">
             <figure class="spec">
@@ -204,7 +232,7 @@ frame.render_widget(chart, area);</code></pre>
 
         <section id="vocabulary">
           <h2>Vocabulary</h2>
-          <p>Both frontends share a small set of types from <code>dither-core</code>.</p>
+          <p>All frontends share a small set of types from <code>dither-core</code>.</p>
           <h3 class="h4">Tone</h3>
           <p>Seven named tones, or any hue. Each expands into a perceptual OKLCH ramp with <code>tone.shade(level)</code>.</p>
           <div class="tones" id="tones"></div>
@@ -246,7 +274,7 @@ for run in grid.runs() {
   <footer class="foot">
     <div class="foot-inner">
       <span>dither-kit-rs</span>
-      <span class="muted">Inspired by <a href="https://github.com/Boring-Software-Inc/dither-kit">dither-kit</a>. Built on <a href="https://gpui-kit.com">GPUI Kit</a> and <a href="https://ratatui.rs">Ratatui</a>.</span>
+      <span class="muted">Inspired by <a href="https://github.com/Boring-Software-Inc/dither-kit">dither-kit</a>. Built on <a href="https://gpui-kit.com">GPUI Kit</a>, <a href="https://github.com/anomalyco/rune">Rune</a> and <a href="https://ratatui.rs">Ratatui</a>.</span>
     </div>
   </footer>
 

@@ -73,19 +73,31 @@ cargo add dither-ratatui ratatui@0.30
 ```
 
 ```toml
-# Desktop (Rune). Rune is not on crates.io under its own name yet, so both
-# come from git.
+# Desktop (Rune). Use the same pinned Rune revision for the framework and
+# every patch below. These entries belong in your app workspace's root
+# Cargo.toml; Cargo does not inherit patches from dependencies.
 [dependencies]
-dither-rune = { git = "https://github.com/DeepanshuMishraa/dither-kit-rs" }
+dither-rune = { git = "https://github.com/DeepanshuMishraa/dither-kit-rs", package = "dither-rune" }
 rune = { git = "https://github.com/anomalyco/rune", rev = "30c564251a9c0e2687720a5b12c903af04d5f2b1" }
+
+[patch.crates-io]
+winit = { git = "https://github.com/anomalyco/rune", rev = "30c564251a9c0e2687720a5b12c903af04d5f2b1" }
+parley_engine = { git = "https://github.com/anomalyco/rune", rev = "30c564251a9c0e2687720a5b12c903af04d5f2b1" }
+wgpu-hal = { git = "https://github.com/anomalyco/rune", rev = "30c564251a9c0e2687720a5b12c903af04d5f2b1" }
+accesskit_windows = { git = "https://github.com/anomalyco/rune", rev = "30c564251a9c0e2687720a5b12c903af04d5f2b1" }
+accesskit_macos = { git = "https://github.com/anomalyco/rune", rev = "30c564251a9c0e2687720a5b12c903af04d5f2b1" }
 ```
 
-A Rune app also needs Rune's `[patch.crates-io]` entries (forks of `winit`, `parley_engine` and a
-few others) in its own workspace, as Rune's docs describe; patches do not carry over from a
-dependency.
+See Rune's ["Depending on Rune" setup notes](https://github.com/anomalyco/rune/blob/30c564251a9c0e2687720a5b12c903af04d5f2b1/crates/rune/README.md#depending-on-rune)
+and [hello example](https://github.com/anomalyco/rune/tree/30c564251a9c0e2687720a5b12c903af04d5f2b1/examples/hello).
+When updating Rune, check its root `Cargo.toml` and keep its listed patch crates on the same revision.
+`dither-rune` is Git-only for now: Rune is not published to crates.io under its own name, and a crate
+with a Git dependency cannot be published there.
 
-The minimum supported Rust version is **1.95**, which `gpui-motion-kit` requires. `dither-rune`
-needs **1.99.1**, which Rune requires; a plain `cargo build` at the root leaves it out.
+The minimum supported Rust version is **1.95** for the workspace and **1.99.1** for `dither-rune`.
+A plain `cargo build` at the repo root leaves `dither-rune` out; build its gallery with
+`cargo run -p dither-rune --example gallery` on Rust 1.99.1 or newer. On Linux, Rune also needs
+`libxkbcommon-dev` and `libwayland-dev` to build; see [Rune's platform setup notes](https://github.com/anomalyco/rune/blob/30c564251a9c0e2687720a5b12c903af04d5f2b1/crates/rune/README.md#linux).
 
 ## Agent skill
 
@@ -191,6 +203,29 @@ positions into chart indexes:
 | `ButtonState::tick(style, dt)` | Advances the hover and press density animation |
 
 The widgets need a **truecolor terminal**. Most modern terminals support it.
+
+## Quick start: Rune
+
+`dither-rune` provides small functions that return Rune elements. Give each cached element a stable
+key, pass a dot size in points, and provide the inputs used to rasterize it:
+
+```rust
+use dither_rune::{Cartesian, CartesianKind, Fill, Series, Tone};
+
+let series = vec![Series::new("Desktop", Tone::Blue, vec![186., 305., 237.])];
+let chart = dither_rune::chart("visitors", 3.0, "visitors-data", |w, h| {
+    Cartesian::new(CartesianKind::Area, &series).render(w, h)
+});
+
+let progress = dither_rune::meter("build-progress", 3.0, 0.72, Tone::Green, Fill::Gradient);
+```
+
+The frontend also provides `avatar`, `sparkline`, `gradient` and `background`. It rasterizes the
+component into a `PixelGrid` and paints horizontal runs as Rune shapes. Chart labels, legends, hit
+handling and redraw scheduling stay in the application. For animated backgrounds, derive a frame
+with `dither_rune::frame(time, fps)` and pass it to `background` at a modest frame rate. See the
+[Rune gallery](crates/dither-rune/examples/gallery.rs) for a complete window with these helpers and
+the upstream [Rune view guide](https://github.com/anomalyco/rune/blob/30c564251a9c0e2687720a5b12c903af04d5f2b1/crates/rune/README.md).
 
 ## The vocabulary
 
