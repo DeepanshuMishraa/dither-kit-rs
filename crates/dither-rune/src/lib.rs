@@ -96,10 +96,15 @@ thread_local! {
 /// dither_rune::shimmer(s.frame, 12.0, || dither_rune::meter("m", 3.0, 0.6, Tone::Blue, Fill::Gradient))
 /// ```
 pub fn shimmer<R>(frame: u64, fps: f32, view: impl FnOnce() -> R) -> R {
-    let previous = SHIMMER.with(|s| s.replace(Some(background_time(frame, fps))));
-    let out = view();
-    SHIMMER.with(|s| s.set(previous));
-    out
+    /// Restores the enclosing scope's time, also when `view` panics.
+    struct Restore(Option<f32>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            SHIMMER.with(|s| s.set(self.0));
+        }
+    }
+    let _restore = Restore(SHIMMER.with(|s| s.replace(Some(background_time(frame, fps)))));
+    view()
 }
 
 fn cached(id: u64, build: impl FnOnce() -> Shape) -> Shape {
@@ -312,6 +317,9 @@ mod tests {
         });
         assert_eq!(inner, (Some(2.0), Some(0.5)));
         assert_eq!(SHIMMER.with(std::cell::Cell::get), None);
+        let caught = std::panic::catch_unwind(|| shimmer(6, 12.0, || panic!("view failed")));
+        assert!(caught.is_err());
+        assert_eq!(SHIMMER.with(std::cell::Cell::get), None, "restored after a panic");
     }
 
     #[test]

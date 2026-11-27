@@ -227,7 +227,9 @@ let chart = Chart::area(&series).raster(Raster::Kitty(Kitty::new(10, 20).dots_ac
 Set `DITHER_RASTER=kitty|braille|halfblock` to force a choice without code changes. Kitty images
 use [Unicode placeholders](https://sw.kovidgoyal.net/kitty/graphics-protocol/#unicode-placeholders),
 so they live in normal cells: text drawn over a placeholder replaces that part of the image, and
-each picture is re-sent only when it changes.
+each picture is re-sent only when it changes. Call `dither_ratatui::kitty::flush(&mut stdout)`
+after every `terminal.draw(..)`. Uploads then go straight to the terminal instead of riding inside
+a cell, where a tooltip or popup drawn on top could drop them.
 
 ### Animation
 

@@ -595,6 +595,8 @@ fn run(terminal: &mut DefaultTerminal, mut app: App) -> io::Result<()> {
     while !app.quit {
         app.tick();
         terminal.draw(|f| draw(f, &mut app))?;
+        // Kitty image uploads go out after the frame, so overlays can't drop them.
+        dither_ratatui::kitty::flush(&mut io::stdout())?;
         if event::poll(Duration::from_millis(16))? {
             match event::read()? {
                 Event::Key(k) if k.kind == KeyEventKind::Press => app.on_key(k.code),

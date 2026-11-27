@@ -65,8 +65,19 @@ impl Raster {
 
     /// Kitty graphics when the terminal supports Unicode placeholders and
     /// reports its cell size in pixels, braille otherwise.
+    ///
+    /// `DITHER_RASTER=kitty|braille|halfblock` overrides the choice.
     pub fn detect() -> Raster {
-        Kitty::detect().map_or(Raster::Braille, Raster::Kitty)
+        match std::env::var("DITHER_RASTER")
+            .unwrap_or_default()
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "kitty" => Raster::Kitty(Kitty::assumed()),
+            "braille" => Raster::Braille,
+            "halfblock" | "half-block" => Raster::HalfBlock,
+            _ => Kitty::detect().map_or(Raster::Braille, Raster::Kitty),
+        }
     }
 
     /// Dither dots per terminal cell, `(columns, rows)`.
@@ -120,11 +131,22 @@ pub fn paint(grid: &PixelGrid, area: Rect, buf: &mut Buffer, fallback_bg: Rgba) 
     Raster::current().paint(grid, area, buf, fallback_bg);
 }
 
+/// The part of `area` inside the buffer, and its offset from `area`'s
+/// origin in cells, so clipped paints still sample the right dots.
+pub(crate) fn clip(area: Rect, buf: &Buffer) -> (Rect, u16, u16) {
+    let clipped = area.intersection(buf.area);
+    (
+        clipped,
+        clipped.x.saturating_sub(area.x),
+        clipped.y.saturating_sub(area.y),
+    )
+}
+
 fn paint_half_block(grid: &PixelGrid, area: Rect, buf: &mut Buffer, fallback_bg: Rgba) {
-    let area = area.intersection(buf.area);
+    let (area, ox, oy) = clip(area, buf);
     for cy in 0..area.height {
         for cx in 0..area.width {
-            let (px, py) = (cx as usize, cy as usize * 2);
+            let (px, py) = ((cx + ox) as usize, (cy + oy) as usize * 2);
             let top = grid.get(px, py);
             let bottom = grid.get(px, py + 1);
             if top.is_none() && bottom.is_none() {
@@ -155,10 +177,10 @@ fn paint_half_block(grid: &PixelGrid, area: Rect, buf: &mut Buffer, fallback_bg:
 const BRAILLE_BITS: [[u8; 4]; 2] = [[0x01, 0x02, 0x04, 0x40], [0x08, 0x10, 0x20, 0x80]];
 
 fn paint_braille(grid: &PixelGrid, area: Rect, buf: &mut Buffer, fallback_bg: Rgba) {
-    let area = area.intersection(buf.area);
+    let (area, ox, oy) = clip(area, buf);
     for cy in 0..area.height {
         for cx in 0..area.width {
-            let (x0, y0) = (cx as usize * 2, cy as usize * 4);
+            let (x0, y0) = ((cx + ox) as usize * 2, (cy + oy) as usize * 4);
             let mut bits = 0u8;
             let (mut r, mut g, mut b, mut wsum) = (0.0f32, 0.0f32, 0.0f32, 0.0f32);
             let mut lit: [Option<Rgba>; 8] = [None; 8];
@@ -280,6 +302,21 @@ mod tests {
         Raster::Braille.paint(&g, area, &mut buf, Rgba::BLACK);
         assert_eq!(buf[(0, 0)].symbol(), "\u{2881}");
         assert_eq!(buf[(0, 0)].fg, Color::Rgb(255, 255, 255));
+    }
+
+    #[test]
+    fn clipped_paints_keep_their_source_offset() {
+        // Two cells wide: only the right cell's dots are lit.
+        let mut g = PixelGrid::new(4, 8);
+        g.set(2, 0, Rgba::WHITE);
+        let mut buf = Buffer::empty(Rect::new(1, 0, 1, 1));
+        Raster::Braille.paint(&g, Rect::new(0, 0, 2, 1), &mut buf, Rgba::BLACK);
+        assert_eq!(buf[(1, 0)].symbol(), "\u{2801}");
+        let mut buf = Buffer::empty(Rect::new(1, 0, 1, 1));
+        let mut g = PixelGrid::new(2, 2);
+        g.set(1, 1, Rgba::WHITE);
+        Raster::HalfBlock.paint(&g, Rect::new(0, 0, 2, 1), &mut buf, Rgba::BLACK);
+        assert_eq!(buf[(1, 0)].symbol(), "▄");
     }
 
     #[test]

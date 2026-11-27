@@ -19,7 +19,7 @@ Rules that matter:
 
 - MSRV is **Rust 1.95**, edition 2024.
 - `dither-gpui` requires `gpui-kit` pinned to **exactly `=0.7.3`** (the version `gpui-motion-kit 0.5` is built against). Do not bump it.
-- `dither-ratatui` needs a **truecolor terminal**. `Raster::current()` auto-picks kitty graphics (real round dots; kitty and Ghostty, not in tmux) or braille (2×4 dots per cell) elsewhere. `Raster::HalfBlock` is the old `▀` mode. Override with `Raster::set_default(..)`, per widget with `.raster(..)`, or with `DITHER_RASTER=kitty|braille|halfblock`.
+- `dither-ratatui` needs a **truecolor terminal**. `Raster::current()` auto-picks kitty graphics (real round dots; kitty and Ghostty, not in tmux) or braille (2×4 dots per cell) elsewhere. `Raster::HalfBlock` is the old `▀` mode. Override with `Raster::set_default(..)`, per widget with `.raster(..)`, or with `DITHER_RASTER=kitty|braille|halfblock`. Call `dither_ratatui::kitty::flush(&mut stdout)` after each `terminal.draw(..)` so kitty uploads can't be lost under overlays.
 - Both frontends re-export the core as `dither_core`; do not add `dither-core` separately unless you use it directly.
 - On Linux, GPUI needs `libfontconfig-dev libwayland-dev libxkbcommon-x11-dev libx11-xcb-dev libvulkan1` and a Vulkan driver.
 

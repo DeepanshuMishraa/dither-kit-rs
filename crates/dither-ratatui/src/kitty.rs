@@ -12,7 +12,7 @@
 //! The encoded image is cached per placement and rebuilt only when the grid
 //! changes, so static charts cost nothing per frame.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -74,13 +74,7 @@ impl Kitty {
     pub fn detect() -> Option<Self> {
         let env = |k: &str| std::env::var(k).unwrap_or_default();
         match env("DITHER_RASTER").to_ascii_lowercase().as_str() {
-            "kitty" => {
-                return Some(
-                    Self::cell_size().map_or(Self::new(FALLBACK_CELL.0, FALLBACK_CELL.1), |(w, h)| {
-                        Self::new(w, h)
-                    }),
-                );
-            }
+            "kitty" => return Some(Self::assumed()),
             "braille" | "halfblock" | "half-block" => return None,
             _ => {}
         }
@@ -96,6 +90,14 @@ impl Kitty {
             return None;
         }
         Self::cell_size().map(|(w, h)| Self::new(w, h))
+    }
+
+    /// Kitty options for this tty's cell size, or a 10×20 cell when the
+    /// terminal does not report one. For forcing kitty graphics on.
+    pub fn assumed() -> Self {
+        Self::cell_size().map_or(Self::new(FALLBACK_CELL.0, FALLBACK_CELL.1), |(w, h)| {
+            Self::new(w, h)
+        })
     }
 
     #[cfg(feature = "crossterm")]
@@ -160,10 +162,12 @@ impl Kitty {
     }
 
     pub(crate) fn paint(self, grid: &PixelGrid, area: Rect, buf: &mut Buffer) {
-        let area = area.intersection(buf.area);
+        // The image always covers the whole requested area, so placeholder
+        // rows and columns stay relative to its origin when it is clipped.
         let max = DIACRITICS.len() as u16;
-        let (cols, rows) = (area.width.min(max), area.height.min(max));
-        if cols == 0 || rows == 0 {
+        let full = Rect::new(area.x, area.y, area.width.min(max), area.height.min(max));
+        let (visible, ox, oy) = crate::raster::clip(full, buf);
+        if visible.is_empty() {
             return;
         }
         let (sx, sy) = self.dots_per_cell();
@@ -175,39 +179,51 @@ impl Kitty {
                 })
             })
         };
-        let cells: Vec<(u16, u16)> = (0..rows)
-            .flat_map(|r| (0..cols).map(move |c| (c, r)))
+        let cells: Vec<(u16, u16)> = (oy..oy + visible.height)
+            .flat_map(|r| (ox..ox + visible.width).map(move |c| (c, r)))
             .filter(|&(c, r)| lit(c, r))
             .collect();
         let Some(&last) = cells.last() else { return };
 
-        let id = image_id(area);
-        let transmit = self.transmission(grid, id, cols, rows);
+        let id = image_id(full);
+        let (transmit, fresh) = self.transmission(grid, id, full.width, full.height);
+        // After the app has called `flush` once, uploads leave out of band
+        // and no cell carries them, so nothing drawn on top can drop one.
+        let embed = !OUT_OF_BAND.with(Cell::get);
+        if !embed && fresh {
+            PENDING.with(|p| p.borrow_mut().push(transmit.clone()));
+        }
         let fg = Color::Rgb((id >> 16) as u8, (id >> 8) as u8, id as u8);
         let mut symbol = String::with_capacity(16);
         for (c, r) in cells {
-            let Some(cell) = buf.cell_mut((area.x + c, area.y + r)) else {
+            let Some(cell) = buf.cell_mut((full.x + c, full.y + r)) else {
                 continue;
             };
             symbol.clear();
-            // The image data rides along in the last placed cell; Ratatui
-            // only re-sends it when it changes.
-            if (c, r) == last {
+            // Without `flush`, the image data rides along in the last placed
+            // cell; Ratatui only re-sends it when it changes.
+            if embed && (c, r) == last {
                 symbol.push_str(&transmit);
             }
             symbol.push(PLACEHOLDER);
             symbol.push(diacritic(r));
             symbol.push(diacritic(c));
+            // Transparent image pixels show the cell background, so keep the
+            // surface colour; everything else is reset so no modifier changes
+            // how the placeholder is read.
+            let bg = cell.bg;
             cell.reset();
             cell.set_symbol(&symbol)
                 .set_fg(fg)
+                .set_bg(bg)
                 .set_diff_option(CellDiffOption::ForcedWidth(NonZeroU16::MIN));
         }
     }
 
     /// The escape sequence that uploads the image and creates its virtual
     /// placement, cached until the picture changes.
-    fn transmission(self, grid: &PixelGrid, id: u32, cols: u16, rows: u16) -> Rc<String> {
+    /// Also says whether it was just built (the picture changed).
+    fn transmission(self, grid: &PixelGrid, id: u32, cols: u16, rows: u16) -> (Rc<String>, bool) {
         let mut h = DefaultHasher::new();
         (cols, rows, self.cell, self.dots_across, self.dot_size.to_bits()).hash(&mut h);
         (grid.width(), grid.height()).hash(&mut h);
@@ -220,7 +236,7 @@ impl Kitty {
             if let Some((k, s)) = cache.get(&id)
                 && *k == key
             {
-                return s.clone();
+                return (s.clone(), false);
             }
             let (w, hpx, img) = self.image(grid, cols, rows);
             let s = Rc::new(encode(&img, w, hpx, id, cols, rows));
@@ -228,13 +244,42 @@ impl Kitty {
                 cache.clear();
             }
             cache.insert(id, (key, s.clone()));
-            s
+            (s, true)
         })
     }
 }
 
 thread_local! {
     static CACHE: RefCell<HashMap<u32, (u64, Rc<String>)>> = RefCell::new(HashMap::new());
+    static PENDING: RefCell<Vec<Rc<String>>> = const { RefCell::new(Vec::new()) };
+    static OUT_OF_BAND: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Sends image uploads straight to the terminal instead of inside a cell.
+/// Call it after every `terminal.draw(..)`, on the thread that draws:
+///
+/// ```no_run
+/// # fn run(terminal: &mut ratatui::DefaultTerminal) -> std::io::Result<()> {
+/// terminal.draw(|frame| { /* render dither widgets */ })?;
+/// dither_ratatui::kitty::flush(&mut std::io::stdout())?;
+/// # Ok(()) }
+/// ```
+///
+/// Without it, each picture's upload travels in one of its own placeholder
+/// cells, which works until something is drawn over that exact cell (a
+/// tooltip, a popup): then the upload is lost and the picture stays blank
+/// until it changes or the cell is uncovered. The first call switches every
+/// later frame to out-of-band uploads, which nothing on screen can cover.
+pub fn flush(out: &mut impl std::io::Write) -> std::io::Result<()> {
+    OUT_OF_BAND.with(|o| o.set(true));
+    let pending = PENDING.with(|p| std::mem::take(&mut *p.borrow_mut()));
+    if pending.is_empty() {
+        return Ok(());
+    }
+    for upload in pending {
+        out.write_all(upload.as_bytes())?;
+    }
+    out.flush()
 }
 
 /// A stable 24-bit image id for a placement area (never 0).
@@ -346,6 +391,54 @@ mod tests {
         assert_eq!(alpha(2, 2), 255, "dot centre is solid");
         assert_eq!(alpha(0, 0), 0, "corner of the pitch stays empty");
         assert_eq!(alpha(7, 2), 0, "neighbouring empty dot stays empty");
+    }
+
+    #[test]
+    fn placeholders_keep_the_surface_background() {
+        let mut g = PixelGrid::new(2, 4);
+        g.set(0, 0, Rgba::WHITE);
+        let area = Rect::new(0, 0, 1, 1);
+        let mut buf = Buffer::empty(area);
+        buf[(0, 0)].set_bg(Color::Rgb(1, 2, 3));
+        Kitty::new(10, 20).paint(&g, area, &mut buf);
+        assert_eq!(buf[(0, 0)].bg, Color::Rgb(1, 2, 3));
+    }
+
+    #[test]
+    fn clipped_images_keep_their_placeholder_offsets() {
+        let mut g = PixelGrid::new(4, 4);
+        for y in 0..4 {
+            g.set(3, y, Rgba::WHITE);
+        }
+        let mut buf = Buffer::empty(Rect::new(1, 0, 1, 1));
+        Kitty::new(10, 20).paint(&g, Rect::new(0, 0, 2, 1), &mut buf);
+        assert!(
+            buf[(1, 0)].symbol().ends_with("\u{10EEEE}\u{305}\u{30D}"),
+            "row 0, column 1"
+        );
+    }
+
+    #[test]
+    fn flush_moves_uploads_out_of_the_cells() {
+        let mut g = PixelGrid::new(4, 8);
+        g.set(0, 0, Rgba::WHITE);
+        let area = Rect::new(7, 3, 2, 2);
+        let mut out = Vec::new();
+        flush(&mut out).unwrap();
+        let mut buf = Buffer::empty(area);
+        Kitty::new(10, 20).paint(&g, area, &mut buf);
+        assert!(
+            !buf[(7, 3)].symbol().contains('\x1b'),
+            "no cell carries the upload"
+        );
+        flush(&mut out).unwrap();
+        assert!(String::from_utf8(out).unwrap().starts_with("\x1b_Ga=T,U=1"));
+        // Unchanged pictures are not sent again.
+        let mut again = Vec::new();
+        Kitty::new(10, 20).paint(&g, area, &mut buf);
+        flush(&mut again).unwrap();
+        assert!(again.is_empty());
+        OUT_OF_BAND.with(|o| o.set(false));
     }
 
     #[test]
