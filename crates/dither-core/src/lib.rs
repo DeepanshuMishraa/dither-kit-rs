@@ -21,5 +21,5 @@ pub use chart::{
 };
 pub use color::{Rgba, Tone};
 pub use dither::{Fill, Matrix};
-pub use grid::{Bloom, PixelGrid, Run};
+pub use grid::{Bloom, DotStyle, PixelGrid, Run};
 pub use paint::{Background, ButtonStyle, Direction, Field, Gradient, avatar, button_texture, meter};

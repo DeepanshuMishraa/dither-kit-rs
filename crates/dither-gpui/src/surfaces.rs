@@ -10,7 +10,7 @@ use gpui_kit::{App, Div, ElementId, Pixels, Role, SharedString, StyleRefinement,
 use gpui_motion_kit::ValueState;
 use gpui_motion_kit::core::{Spring, Transition};
 
-use crate::pixels::{Clock, pixel_canvas, shimmer_time, shimmered};
+use crate::pixels::{Clock, pixel_canvas_with, shimmer_time, shimmered};
 
 /// A dithered gradient. By default it fills its parent (`absolute`, inset
 /// 0) like dither-kit's `DitherGradient`; restyle it to size it yourself.
@@ -20,6 +20,7 @@ pub struct DitherGradient {
     spec: GradientSpec,
     pixel: Pixels,
     shimmer: bool,
+    dot: Option<dither_core::DotStyle>,
 }
 
 impl DitherGradient {
@@ -29,6 +30,7 @@ impl DitherGradient {
             spec: GradientSpec::new(from),
             pixel: px(3.0),
             shimmer: false,
+            dot: None,
         }
     }
 
@@ -64,6 +66,13 @@ impl DitherGradient {
         self.shimmer = shimmer;
         self
     }
+
+    /// Draw pixels as squares or round dots; unset follows
+    /// [`set_dot_style`](crate::set_dot_style).
+    pub fn dot_style(mut self, style: dither_core::DotStyle) -> Self {
+        self.dot = Some(style);
+        self
+    }
 }
 
 impl Styled for DitherGradient {
@@ -77,9 +86,11 @@ impl RenderOnce for DitherGradient {
         let spec = self.spec;
         let shimmer = self.shimmer.then(|| shimmer_time(window, cx)).flatten();
         self.base.overflow_hidden().child(
-            pixel_canvas(self.pixel, move |w, h| shimmered(spec.render(w, h), shimmer))
-                .absolute()
-                .size_full(),
+            pixel_canvas_with(self.pixel, self.dot, move |w, h| {
+                shimmered(spec.render(w, h), shimmer)
+            })
+            .absolute()
+            .size_full(),
         )
     }
 }
@@ -96,6 +107,7 @@ pub struct DitherBackground {
     pixel: Pixels,
     speed: f32,
     shimmer: bool,
+    dot: Option<dither_core::DotStyle>,
 }
 
 impl DitherBackground {
@@ -107,6 +119,7 @@ impl DitherBackground {
             pixel: px(4.0),
             speed: 1.0,
             shimmer: false,
+            dot: None,
         }
     }
 
@@ -141,6 +154,13 @@ impl DitherBackground {
         self.shimmer = shimmer;
         self
     }
+
+    /// Draw pixels as squares or round dots; unset follows
+    /// [`set_dot_style`](crate::set_dot_style).
+    pub fn dot_style(mut self, style: dither_core::DotStyle) -> Self {
+        self.dot = Some(style);
+        self
+    }
 }
 
 impl Styled for DitherBackground {
@@ -156,9 +176,11 @@ impl RenderOnce for DitherBackground {
         let spec = self.spec;
         let shimmer = self.shimmer.then(|| shimmer_time(window, cx)).flatten();
         self.base.overflow_hidden().child(
-            pixel_canvas(self.pixel, move |w, h| shimmered(spec.render(w, h, t), shimmer))
-                .absolute()
-                .size_full(),
+            pixel_canvas_with(self.pixel, self.dot, move |w, h| {
+                shimmered(spec.render(w, h, t), shimmer)
+            })
+            .absolute()
+            .size_full(),
         )
     }
 }
@@ -169,6 +191,7 @@ pub struct DitherAvatar {
     name: SharedString,
     size: Pixels,
     hue: Option<f32>,
+    dot: Option<dither_core::DotStyle>,
 }
 
 impl DitherAvatar {
@@ -177,6 +200,7 @@ impl DitherAvatar {
             name: name.into(),
             size: px(40.0),
             hue: None,
+            dot: None,
         }
     }
 
@@ -189,6 +213,13 @@ impl DitherAvatar {
     /// Overrides the hue (0..360) derived from the name.
     pub fn hue(mut self, hue: f32) -> Self {
         self.hue = Some(hue);
+        self
+    }
+
+    /// Draw pixels as squares or round dots; unset follows
+    /// [`set_dot_style`](crate::set_dot_style).
+    pub fn dot_style(mut self, style: dither_core::DotStyle) -> Self {
+        self.dot = Some(style);
         self
     }
 }
@@ -205,7 +236,7 @@ impl RenderOnce for DitherAvatar {
             .flex_none()
             .rounded(cx.theme().radius)
             .overflow_hidden()
-            .child(pixel_canvas(pixel, move |_, _| avatar(&name, hue)).size_full())
+            .child(pixel_canvas_with(pixel, self.dot, move |_, _| avatar(&name, hue)).size_full())
     }
 }
 
@@ -220,6 +251,7 @@ pub struct DitherMeter {
     height: Pixels,
     label: Option<SharedString>,
     shimmer: bool,
+    dot: Option<dither_core::DotStyle>,
 }
 
 impl DitherMeter {
@@ -233,6 +265,7 @@ impl DitherMeter {
             height: px(10.0),
             label: None,
             shimmer: false,
+            dot: None,
         }
     }
 
@@ -254,6 +287,13 @@ impl DitherMeter {
     /// Animate the dots: each breathes, a sheen sweeps across, a few flash.
     pub fn shimmer(mut self, shimmer: bool) -> Self {
         self.shimmer = shimmer;
+        self
+    }
+
+    /// Draw pixels as squares or round dots; unset follows
+    /// [`set_dot_style`](crate::set_dot_style).
+    pub fn dot_style(mut self, style: dither_core::DotStyle) -> Self {
+        self.dot = Some(style);
         self
     }
 
@@ -285,7 +325,7 @@ impl RenderOnce for DitherMeter {
             .w_full()
             .h(self.height)
             .child(
-                pixel_canvas(self.pixel, move |w, h| {
+                pixel_canvas_with(self.pixel, self.dot, move |w, h| {
                     shimmered(meter(w, h, shown as f32, tone, fill), shimmer)
                 })
                 .absolute()

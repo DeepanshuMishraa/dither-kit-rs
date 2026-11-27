@@ -245,6 +245,18 @@ GPUI components take `.shimmer(true)` and schedule their own frames. Shimmer pau
 OS reduced-motion setting. In Rune, wrap any part of a view in
 `dither_rune::shimmer(frame, fps, || ...)`, and every canvas built inside it shimmers.
 
+### Dot style (desktop)
+
+GPUI and Rune draw square pixels by default (`DotStyle::Square`), the classic hard-edged
+dither. `DotStyle::Round` draws a disc in the middle of each pixel with a gap around it, like an
+LED panel or halftone print, and matches the terminal's kitty-graphics dots:
+
+```rust
+dither_gpui::set_dot_style(DotStyle::Round, cx);                  // whole GPUI app
+DitherChart::area("visitors", series).dot_style(DotStyle::Round); // one component
+dither_rune::dots(DotStyle::Round, || view(state, cx))            // a Rune subtree
+```
+
 ## Quick start: Rune
 
 `dither-rune` provides small functions that return Rune elements. Give each cached element a stable
@@ -319,7 +331,8 @@ Terminal gallery keys:
 | `g` | Cycle raster (kitty, braille, half-block) |
 | `q` | Quit |
 
-Every gallery takes `--animate` to start with the dots shimmering. The terminal gallery's
+Every gallery takes `--animate` to start with the dots shimmering. The GPUI and Rune galleries
+take `--round` for round dots and have a toggle for it. The terminal gallery's
 `--snapshot <dir>` writes each page as a JSON cell dump, and
 [`scripts/render_snapshot.py`](scripts/render_snapshot.py) turns a dump into a PNG. Kitty images
 are decoded from the escape data, as a terminal would decode them.

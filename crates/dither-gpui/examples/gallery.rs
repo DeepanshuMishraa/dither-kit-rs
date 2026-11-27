@@ -2,7 +2,8 @@
 //!
 //! Run with: `cargo run -p dither-gpui --example gallery`
 //! Add `-- --animate` to start with the dots shimmering (or flip the
-//! Shimmer switch).
+//! Shimmer switch), and `-- --round` to draw round dots instead of square
+//! pixels (or use the Dots button).
 
 use dither_gpui::prelude::Fill;
 use dither_gpui::prelude::*;
@@ -219,6 +220,16 @@ impl Render for Gallery {
                         this.shimmer = *v;
                         cx.notify();
                     })),
+            )
+            .child(
+                Button::new("dots")
+                    .small()
+                    .outline()
+                    .label(format!("Dots: {}", dither_gpui::dot_style(cx).name()))
+                    .on_click(|_, _, cx| {
+                        let next = dither_gpui::dot_style(cx).next();
+                        dither_gpui::set_dot_style(next, cx);
+                    }),
             )
             .child(div().flex_1())
             .child(
@@ -542,6 +553,9 @@ fn main() {
     application().with_assets(assets::Assets).run(|cx| {
         init(cx);
         Theme::change(ThemeMode::Dark, None, cx);
+        if std::env::args().any(|a| a == "--round") {
+            dither_gpui::set_dot_style(DotStyle::Round, cx);
+        }
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::centered(size(px(1240.0), px(900.0)), cx)),
             titlebar: Some(TitlebarOptions {

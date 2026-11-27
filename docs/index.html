@@ -25,6 +25,7 @@
       </a>
       <nav class="top-links">
         <a href="#install">Docs</a>
+        <a href="#looks">Shimmer &amp; dots</a>
         <a href="#components">Components</a>
         <a class="gh-stars-link" href="https://github.com/DeepanshuMishraa/dither-kit-rs" aria-label="dither-kit-rs on GitHub">
           <span class="gh-stars" data-gh-stars="DeepanshuMishraa/dither-kit-rs"><svg class="gh-stars-logo" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg><span class="gh-stars-count" aria-hidden="true"><span class="gh-stars-number"></span><span class="gh-stars-particles"><svg class="gh-stars-star" width="13" height="13" viewBox="0 0 24 24"><path class="o" d="M12 2.5l2.9 6.1 6.6.9-4.8 4.6 1.2 6.6L12 17.5l-5.9 3.2 1.2-6.6L2.5 9.5l6.6-.9z"/><path class="f" d="M12 2.5l2.9 6.1 6.6.9-4.8 4.6 1.2 6.6L12 17.5l-5.9 3.2 1.2-6.6L2.5 9.5l6.6-.9z"/></svg></span></span></span>
@@ -52,7 +53,11 @@
             <div class="chart-title">Visitors</div>
             <div class="chart-sub">Last 12 months</div>
           </div>
-          <div class="legend" id="hero-legend"></div>
+          <div class="chart-tools">
+            <div class="legend" id="hero-legend"></div>
+            <button type="button" class="chip" data-shimmer-toggle aria-pressed="false">✦ Shimmer</button>
+            <button type="button" class="chip" data-round-toggle aria-pressed="false">● Round dots</button>
+          </div>
         </div>
         <div class="hero-stage" id="hero-stage">
           <canvas data-demo="hero" aria-label="Dithered area chart of visitors over twelve months" role="img"></canvas>
@@ -71,7 +76,9 @@
         <a href="#patterns">Integration patterns</a>
         <a href="#gpui">GPUI Kit</a>
         <a href="#ratatui">Ratatui</a>
+        <a href="#terminal">In the terminal</a>
         <a href="#rune">Rune</a>
+        <a href="#looks">Shimmer &amp; dots</a>
         <a href="#components">Components</a>
         <a href="#vocabulary">Vocabulary</a>
         <a href="#motion">Motion &amp; access</a>
@@ -84,8 +91,8 @@
             It is an old print technique that gives interfaces a crisp, tactile texture.
             dither-kit-rs brings it to native Rust UIs and terminal apps.</p>
           <dl class="facts">
-            <div><dt>Deterministic</dt><dd>Ordered Bayer thresholds are stateless per pixel. Nothing shimmers while animating.</dd></div>
-            <div><dt>Native</dt><dd>GPU quads in GPUI. Half-block glyphs in the terminal. Text stays real text.</dd></div>
+            <div><dt>Deterministic</dt><dd>Ordered Bayer thresholds are stateless per pixel, so nothing flickers. Motion is opt-in with the <code>shimmer</code> flag.</dd></div>
+            <div><dt>Native</dt><dd>GPU quads in GPUI. Real round dots in the terminal through kitty graphics, braille elsewhere. Text stays real text.</dd></div>
             <div><dt>Small</dt><dd>The core has no dependencies. Each frontend is a thin painter.</dd></div>
           </dl>
         </section>
@@ -118,7 +125,7 @@ Then review the resulting code for correct imports, ownership, state handling, r
         <section id="dependencies">
           <h2>Dependency reference</h2>
           <p>Dependency manifests are reference material for humans and agents. The minimum supported Rust version is 1.95, except <code>dither-rune</code>, which needs 1.99.1 or newer.</p>
-          <p>For a GPUI Kit app, add <code>dither-gpui</code> and pin <code>gpui-kit</code> to exactly <code>=0.7.3</code>. For a Ratatui app, add <code>dither-ratatui</code> with Ratatui <code>0.30</code>. For another renderer, add <code>dither-core</code>.</p>
+          <p>For a GPUI Kit app, add <code>dither-gpui</code> and pin <code>gpui-kit</code> to exactly <code>=0.7.3</code>. For a Ratatui app, add <code>dither-ratatui</code> with Ratatui <code>0.30.1</code> or newer. For another renderer, add <code>dither-core</code>.</p>
           <p class="note">GPUI Kit is pinned to 0.7.3, the release <a href="https://github.com/1bye/gpui-motion">gpui-motion-kit</a> 0.5 is built against.</p>
           <h3>Rune (Git)</h3>
           <p><code>dither-rune</code> follows Rune's pinned development revision. Add both Git dependencies to your app, then add Rune's five crate patches to the app workspace root. Keep the same revision on every entry; Cargo does not inherit patches from dependencies.</p>
@@ -163,7 +170,9 @@ accesskit_macos = { git = "https://github.com/anomalyco/rune", rev = "30c564251a
           <ul class="plain">
             <li><strong>Dependency resolution fails.</strong> Check the app's Rust version and preserve the GPUI Kit exact pin. Rune requires the same pinned Git revision for Rune, <code>dither-rune</code> compatibility patches, and related crates.</li>
             <li><strong>Linux desktop build fails.</strong> GPUI needs <code>libfontconfig-dev</code>, <code>libwayland-dev</code>, <code>libxkbcommon-x11-dev</code>, <code>libx11-xcb-dev</code>, and a working Vulkan driver. Rune needs <code>libxkbcommon-dev</code> and <code>libwayland-dev</code>.</li>
-            <li><strong>Terminal colors look muted.</strong> Run Ratatui in a truecolor terminal; the renderer uses foreground and background colors to represent two pixels per cell.</li>
+            <li><strong>Terminal colors look muted.</strong> Run Ratatui in a truecolor terminal. Braille cells take one colour each, so for per-dot colour use kitty or Ghostty, where kitty graphics are picked automatically.</li>
+            <li><strong>Terminal dots look blocky.</strong> You are on <code>Raster::HalfBlock</code>, or <code>DITHER_RASTER=halfblock</code> is set. Unset it, or set <code>Raster::Braille</code> or <code>Raster::Kitty</code>.</li>
+            <li><strong>A kitty image stays blank under a popup.</strong> Call <code>dither_ratatui::kitty::flush(&amp;mut stdout)</code> after every <code>terminal.draw(..)</code>, so uploads never travel inside a cell that can be covered.</li>
             <li><strong>Rune element is blank initially.</strong> Its canvas sizes the grid after layout. Allow a subsequent frame and schedule redraws when inputs or animation frames change.</li>
             <li><strong>Animation keeps using CPU.</strong> Stop scheduling frames when animation is unnecessary and respect reduced-motion preferences in the host app.</li>
           </ul>
@@ -189,16 +198,44 @@ DitherChart::area("visitors", vec![
 
         <section id="ratatui">
           <h2>Ratatui</h2>
-          <p>Widgets are plain values. Each terminal cell holds two square pixels. Hit-test helpers turn mouse positions into data indexes.</p>
+          <p>Widgets are plain values. Hit-test helpers turn mouse positions into data indexes. A <code>Raster</code> decides how dots reach the terminal, and it is picked automatically on first use.</p>
           <pre><code class="language-rust">use dither_ratatui::{Chart, prelude::*};
 
-let chart = Chart::area(&amp;series)
-    .labels(&amp;labels)
-    .hover(chart.index_at(area, mouse.column, mouse.row))
-    .progress(ease::out_cubic(t));
+terminal.draw(|frame| {
+    let chart = Chart::area(&amp;series)
+        .labels(&amp;labels)
+        .hover(chart.index_at(area, mouse.column, mouse.row))
+        .progress(ease::out_cubic(t))
+        .shimmer(true)          // optional: the dots breathe and sparkle
+        .time(elapsed_secs);
+    frame.render_widget(chart, area);
+})?;
+// Send kitty image uploads after the frame, so popups can't swallow them.
+dither_ratatui::kitty::flush(&amp;mut std::io::stdout())?;</code></pre>
+          <table>
+            <tr><td><code>Kitty</code></td><td>Real anti-aliased round dots with gaps, one colour per dot, at the terminal's own pixel size. Picked automatically in kitty and Ghostty.</td></tr>
+            <tr><td><code>Braille</code></td><td>2×4 small dots per cell, one colour per cell. The fallback for any truecolor terminal.</td></tr>
+            <tr><td><code>HalfBlock</code></td><td>The old renderer: two square pixels per cell. Opt-in only.</td></tr>
+          </table>
+          <p class="note">Override with <code>Raster::set_default(..)</code>, per widget with <code>.raster(..)</code>, or with <code>DITHER_RASTER=kitty|braille|halfblock</code>. Requires a truecolor terminal.</p>
+        </section>
 
-frame.render_widget(chart, area);</code></pre>
-          <p class="note">Requires a truecolor terminal.</p>
+        <section id="terminal">
+          <h2>In the terminal</h2>
+          <p>The same gallery page at the same size, before and after. Half blocks made every dot as wide as a character, so neighbouring dots touched and smeared. Now each dot is its own small round mark.</p>
+          <figure class="spec term-fig">
+            <div class="stage term">
+              <img id="term-img" src="screenshots/terminal-after-kitty.png" width="1600" height="1000" loading="lazy" alt="dither-kit terminal gallery rendered with kitty graphics: charts made of crisp round dots">
+              <div class="seg" id="term-seg" role="group" aria-label="Terminal renderer">
+                <button aria-pressed="false" data-src="screenshots/terminal-before.png" data-alt="Before: the terminal gallery with blocky half-block pixels" data-cap="Before: half blocks. Every pixel is a full cell wide and touches its neighbours.">Before</button>
+                <button aria-pressed="true" data-src="screenshots/terminal-after-kitty.png" data-alt="After: the terminal gallery rendered with kitty graphics" data-cap="After: kitty graphics. Real round dots with gaps, one colour per dot.">Kitty</button>
+                <button aria-pressed="false" data-src="screenshots/terminal-after-braille.png" data-alt="After: the terminal gallery rendered with braille dots" data-cap="After: braille. 2×4 dots per cell in any truecolor terminal.">Braille</button>
+                <button aria-pressed="false" data-src="screenshots/terminal-zoom.png" data-alt="1:1 zoom comparing half blocks, braille and kitty dots" data-cap="1:1 zoom, left to right: half blocks, braille, kitty.">Zoom</button>
+                <button aria-pressed="false" data-src="screenshots/terminal-shimmer.gif" data-alt="The terminal chart with shimmer on: dots breathe and sparkle" data-cap="Shimmer: cargo run -p dither-ratatui --example gallery -- --animate">Shimmer</button>
+              </div>
+            </div>
+            <figcaption><p id="term-cap">After: kitty graphics. Real round dots with gaps, one colour per dot.</p><code>cargo run -p dither-ratatui --example gallery</code></figcaption>
+          </figure>
         </section>
 
         <section id="rune">
@@ -215,9 +252,39 @@ let meter = dither_rune::meter("build-progress", 3.0, 0.72, Tone::Green, Fill::G
           <p class="note">See the complete <a href="https://github.com/DeepanshuMishraa/dither-kit-rs/blob/main/crates/dither-rune/examples/gallery.rs">dither-rune gallery</a> and the upstream <a href="https://github.com/anomalyco/rune/blob/30c564251a9c0e2687720a5b12c903af04d5f2b1/crates/rune/README.md">Rune API guide</a>. From this repository, run <code>cargo run -p dither-rune --example gallery</code> with Rust 1.99.1+.</p>
         </section>
 
+        <section id="looks">
+          <h2>Shimmer &amp; dots</h2>
+          <p>Two switches change how every component looks, in every frontend. Both are off by default, so existing apps look the same as before. Try them on the chart at the top of the page.</p>
+          <h3 class="h4">Shimmer</h3>
+          <p>Keeps the dots alive after the entrance. Each lit dot breathes on its own phase, a soft sheen sweeps across, and a few dots flash. Shapes never move, so charts stay readable. It pauses when the system asks for reduced motion.</p>
+          <pre><code class="language-rust">// GPUI: components schedule their own frames.
+DitherChart::area("visitors", series).shimmer(true)
+
+// Ratatui: redraw every frame and pass the running time.
+Chart::area(&amp;series).shimmer(true).time(elapsed_secs)
+
+// Rune: every canvas built inside the closure shimmers.
+dither_rune::shimmer(frame, fps, || view(state, cx))
+
+// Anything else: on a freshly rendered grid.
+grid.shimmer(time);</code></pre>
+          <h3 class="h4">Dot style</h3>
+          <p><code>DotStyle::Square</code> fills each pixel edge to edge, the classic hard-edged dither. <code>DotStyle::Round</code> draws a disc in the middle of each pixel with a gap around it, like an LED panel or a halftone print. It matches the terminal's kitty-graphics dots.</p>
+          <pre><code class="language-rust">// GPUI: the whole app, or one component.
+dither_gpui::set_dot_style(DotStyle::Round, cx);
+DitherMeter::new("upload", 0.6, Tone::Blue).dot_style(DotStyle::Square)
+
+// Rune: every element built inside the closure.
+dither_rune::dots(DotStyle::Round, || view(state, cx))</code></pre>
+          <p class="note">In the terminal the raster sets the dot shape: kitty graphics are round, braille dots are small, and half blocks are square. Every gallery takes <code>--animate</code>, and the GPUI and Rune galleries take <code>--round</code>.</p>
+          <p><button type="button" class="chip" data-shimmer-toggle aria-pressed="false">✦ Shimmer</button> <button type="button" class="chip" data-round-toggle aria-pressed="false">● Round dots</button></p>
+        </section>
+
         <section id="components">
           <h2>Components</h2>
-          <p>These demos run on a JavaScript port of the core, so they show the same pixels the Rust crates draw.</p>
+          <p>These demos run on a JavaScript port of the core, so they show the same pixels the Rust crates draw. Turn on <code>shimmer</code> to see the animation flag every frontend shares.</p>
+          <p><button type="button" class="chip" data-shimmer-toggle aria-pressed="false">✦ Shimmer</button>
+            <button type="button" class="chip" data-round-toggle aria-pressed="false">● Round dots</button></p>
 
           <div class="specimens">
             <figure class="spec">
@@ -290,6 +357,7 @@ let meter = dither_rune::meter("build-progress", 3.0, 0.72, Tone::Green, Fill::G
           <h3 class="h4">Fill</h3>
           <div class="fills" id="fills"></div>
           <table>
+            <tr><td><code>DotStyle</code></td><td><code>Square</code> <code>Round</code>: how desktop frontends draw each pixel</td></tr>
             <tr><td><code>Bloom</code></td><td><code>Off</code> <code>Low</code> <code>High</code> <code>Aura</code>: a dithered glow around lit pixels</td></tr>
             <tr><td><code>Matrix</code></td><td><code>Bayer2</code> <code>Bayer4</code> <code>Bayer8</code> <code>Halftone</code> <code>Noise</code></td></tr>
             <tr><td><code>Field</code></td><td><code>Plasma</code> <code>Waves</code> <code>Ripple</code> <code>Noise</code> <code>Aurora</code></td></tr>
@@ -300,6 +368,7 @@ let meter = dither_rune::meter("build-progress", 3.0, 0.72, Tone::Green, Fill::G
         <section id="motion">
           <h2>Motion &amp; accessibility</h2>
           <ul class="plain">
+            <li><strong>Shimmer.</strong> One flag in every frontend keeps the dots alive: each breathes on its own phase, a sheen sweeps across, and a few flash. Use <code>.shimmer(true)</code> in GPUI and Ratatui, and <code>dither_rune::shimmer(frame, fps, || view)</code> in Rune. Shapes never move, and it pauses under reduced motion.</li>
             <li><strong>Motion.</strong> GPUI uses <a href="https://github.com/1bye/gpui-motion">gpui-motion-kit</a>: tween entrances, spring buttons and meters, a sliding tooltip, and a looping clock for backgrounds. All of it respects reduced motion.</li>
             <li><strong>Buttons.</strong> <code>DitherButton</code> wraps the GPUI Kit <code>Button</code>. Focus, Tab order, Enter and Space, the focus ring and the disabled state come from Kit.</li>
             <li><strong>Semantics.</strong> Charts are labelled figures, meters are progress indicators, and legend entries are focusable buttons.</li>

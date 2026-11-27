@@ -280,6 +280,19 @@ figcaption code { font-size: 11.5px; color: var(--faint); background: none; bord
 .seg button:hover { color: #fff; }
 .seg button[aria-pressed="true"] { background: rgb(255 255 255 / 0.1); color: #fff; }
 
+.chart-tools { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.chip {
+  height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 7px; background: transparent;
+  color: var(--muted); font: 500 12.5px var(--sans); cursor: pointer; transition: color .15s, background .15s, border-color .15s;
+}
+.chip:hover { color: var(--fg); background: var(--code-bg); }
+.chip[aria-pressed="true"] { color: var(--fg); background: var(--code-bg); border-color: var(--faint); }
+
+.term-fig { margin-top: 24px; }
+.stage.term { height: auto; background: #0b0b0c; padding-bottom: 56px; }
+.stage.term img { display: block; width: 100%; height: auto; }
+.stage.term .seg { bottom: 12px; max-width: calc(100% - 24px); overflow-x: auto; }
+
 .stage.meters { height: auto; padding: 36px 28px; gap: 18px; }
 .meters canvas { height: 10px; }
 

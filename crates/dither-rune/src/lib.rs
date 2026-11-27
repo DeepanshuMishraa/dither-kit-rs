@@ -24,8 +24,8 @@ use std::{
 };
 
 pub use dither_core::{
-    self as core, Background, Bloom, Cartesian, CartesianKind, Direction, Field, Fill, Gradient, Matrix, Pie,
-    PixelGrid, Radar, Rgba, Series, Slice, Tone,
+    self as core, Background, Bloom, Cartesian, CartesianKind, Direction, DotStyle, Field, Fill, Gradient,
+    Matrix, Pie, PixelGrid, Radar, Rgba, Series, Slice, Tone,
 };
 use rune::{Color, El, Shape, el};
 
@@ -60,6 +60,37 @@ pub fn tone(c: Color) -> Tone {
     }
 }
 
+/// The grid as a shape in `style`: square pixels (one rectangle per run) or
+/// round dots (one disc per pixel with a gap around it).
+pub fn shape_styled(grid: &PixelGrid, dot: f32, style: DotStyle) -> Shape {
+    match style {
+        DotStyle::Square => shape(grid, dot),
+        DotStyle::Round => {
+            const SIDES: usize = 12;
+            let r = 0.5 * dot * DotStyle::ROUND_DIAMETER;
+            let ring: Vec<[f32; 2]> = (0..SIDES)
+                .map(|i| {
+                    let a = i as f32 / SIDES as f32 * std::f32::consts::TAU;
+                    [r * a.cos(), r * a.sin()]
+                })
+                .collect();
+            let mut s = Shape::new();
+            for y in 0..grid.height() {
+                for x in 0..grid.width() {
+                    let Some(c) = grid.get(x, y) else { continue };
+                    if c.a == 0 {
+                        continue;
+                    }
+                    let (cx, cy) = ((x as f32 + 0.5) * dot, (y as f32 + 0.5) * dot);
+                    let pts: Vec<[f32; 2]> = ring.iter().map(|[px, py]| [cx + px, cy + py]).collect();
+                    s = s.fill(pts, color(c));
+                }
+            }
+            s
+        }
+    }
+}
+
 /// The grid as a shape, `dot` points per pixel, one rectangle per run.
 pub fn shape(grid: &PixelGrid, dot: f32) -> Shape {
     let mut s = Shape::new();
@@ -75,7 +106,7 @@ pub fn shape(grid: &PixelGrid, dot: f32) -> Shape {
 pub fn pixels(grid: &PixelGrid, dot: f32) -> El {
     el().size(grid.width() as f32 * dot, grid.height() as f32 * dot)
         .a11y_hidden()
-        .shape(shape(grid, dot))
+        .shape(shape_styled(grid, dot, current_dots()))
 }
 
 /// Cache size: past this many grids the cache starts over.
@@ -84,6 +115,29 @@ const CACHE_LIMIT: usize = 512;
 thread_local! {
     static CACHE: RefCell<HashMap<u64, Shape>> = RefCell::new(HashMap::new());
     static SHIMMER: std::cell::Cell<Option<f32>> = const { std::cell::Cell::new(None) };
+    static DOTS: std::cell::Cell<DotStyle> = const { std::cell::Cell::new(DotStyle::Square) };
+}
+
+/// Builds `view` with every dither element inside it drawn in `style`:
+/// square pixels (the default) or round dots with gaps between them.
+///
+/// ```ignore
+/// dither_rune::dots(DotStyle::Round, || page(s, cx))
+/// ```
+pub fn dots<R>(style: DotStyle, view: impl FnOnce() -> R) -> R {
+    /// Restores the enclosing style, also when `view` panics.
+    struct Restore(DotStyle);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            DOTS.with(|s| s.set(self.0));
+        }
+    }
+    let _restore = Restore(DOTS.with(|s| s.replace(style)));
+    view()
+}
+
+fn current_dots() -> DotStyle {
+    DOTS.with(std::cell::Cell::get)
 }
 
 /// Builds `view` with every dither canvas inside it shimmering at animation
@@ -138,14 +192,15 @@ pub fn canvas(key: &str, dot: f32, inputs: impl Hash, build: impl FnOnce(usize, 
     };
     let mut hasher = DefaultHasher::new();
     let shimmer = SHIMMER.with(std::cell::Cell::get);
-    (key, cols, rows, dot.to_bits(), shimmer.map(f32::to_bits)).hash(&mut hasher);
+    let style = current_dots();
+    (key, cols, rows, dot.to_bits(), shimmer.map(f32::to_bits), style).hash(&mut hasher);
     inputs.hash(&mut hasher);
     e.shape(cached(hasher.finish(), || {
         let mut grid = build(cols, rows);
         if let Some(t) = shimmer {
             grid.shimmer(t);
         }
-        shape(&grid, dot)
+        shape_styled(&grid, dot, style)
     }))
 }
 
@@ -217,12 +272,13 @@ pub fn meter(key: &str, dot: f32, value: f32, tone: Tone, fill: Fill) -> El {
 /// dither-kit's 8×8 identicon for `name`, `size` points square.
 pub fn avatar(name: &str, size: f32, hue: Option<f32>) -> El {
     let mut hasher = DefaultHasher::new();
-    ("avatar", name, size.to_bits(), hue.map(f32::to_bits)).hash(&mut hasher);
+    let style = current_dots();
+    ("avatar", name, size.to_bits(), hue.map(f32::to_bits), style).hash(&mut hasher);
     let dot = size / 8.0;
     el().size(size, size)
         .a11y_hidden()
         .shape(cached(hasher.finish(), || {
-            shape(&dither_core::avatar(name, hue), dot)
+            shape_styled(&dither_core::avatar(name, hue), dot, style)
         }))
 }
 
@@ -306,6 +362,18 @@ mod tests {
         assert_eq!(g.runs().count(), 2);
         assert!(!shape(&g, 2.0).is_empty());
         assert!(shape(&PixelGrid::new(3, 3), 2.0).is_empty());
+    }
+
+    #[test]
+    fn round_dots_draw_one_disc_per_pixel_and_scope_restores() {
+        let mut g = PixelGrid::new(3, 1);
+        g.set(0, 0, Rgba::WHITE);
+        g.set(1, 0, Rgba::WHITE);
+        assert!(!shape_styled(&g, 4.0, DotStyle::Round).is_empty());
+        assert!(shape_styled(&PixelGrid::new(2, 2), 4.0, DotStyle::Round).is_empty());
+        assert_eq!(current_dots(), DotStyle::Square);
+        assert_eq!(dots(DotStyle::Round, current_dots), DotStyle::Round);
+        assert_eq!(current_dots(), DotStyle::Square);
     }
 
     #[test]

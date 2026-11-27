@@ -3,8 +3,8 @@
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
-use dither_core::{PixelGrid, Rgba as CoreRgba};
-use gpui_kit::{App, Bounds, Canvas, Hsla, Pixels, Rgba, Window, canvas, fill, point, px, size};
+use dither_core::{DotStyle, PixelGrid, Rgba as CoreRgba};
+use gpui_kit::{App, Bounds, Canvas, Global, Hsla, Pixels, Rgba, Window, canvas, fill, point, px, size};
 use gpui_motion_kit::AnimationState;
 use gpui_motion_kit::core::{Animation, Easing, Repeat, RepeatMode, Target};
 
@@ -38,6 +38,57 @@ pub fn paint_grid(grid: &PixelGrid, origin: gpui_kit::Point<Pixels>, pixel: Pixe
     }
 }
 
+/// Paints `grid` in `style`: [`DotStyle::Square`] merges runs like
+/// [`paint_grid`]; [`DotStyle::Round`] draws one rounded quad per lit pixel,
+/// a disc with a gap around it.
+pub fn paint_grid_styled(
+    grid: &PixelGrid,
+    origin: gpui_kit::Point<Pixels>,
+    pixel: Pixels,
+    style: DotStyle,
+    window: &mut Window,
+) {
+    match style {
+        DotStyle::Square => paint_grid(grid, origin, pixel, window),
+        DotStyle::Round => {
+            let d = pixel * DotStyle::ROUND_DIAMETER;
+            let inset = (pixel - d) / 2.0;
+            for y in 0..grid.height() {
+                for x in 0..grid.width() {
+                    let Some(c) = grid.get(x, y) else { continue };
+                    if c.a == 0 {
+                        continue;
+                    }
+                    let at = point(
+                        origin.x + pixel * x as f32 + inset,
+                        origin.y + pixel * y as f32 + inset,
+                    );
+                    window.paint_quad(fill(Bounds::new(at, size(d, d)), hsla(c)).corner_radii(d / 2.0));
+                }
+            }
+        }
+    }
+}
+
+/// The app-wide dot style, set with [`set_dot_style`].
+struct GlobalDotStyle(DotStyle);
+
+impl Global for GlobalDotStyle {}
+
+/// Sets how every dither component in the app draws its pixels (default
+/// [`DotStyle::Square`]); components can still override it with
+/// `.dot_style(..)`. Open windows redraw with the new style.
+pub fn set_dot_style(style: DotStyle, cx: &mut App) {
+    cx.set_global(GlobalDotStyle(style));
+    cx.refresh_windows();
+}
+
+/// The app-wide dot style.
+pub fn dot_style(cx: &App) -> DotStyle {
+    cx.try_global::<GlobalDotStyle>()
+        .map_or(DotStyle::Square, |g| g.0)
+}
+
 /// A canvas that builds a grid sized to its own layout bounds and paints it.
 ///
 /// `build(width, height)` runs during prepaint, after layout, so the grid
@@ -47,13 +98,26 @@ pub fn pixel_canvas(
     pixel: Pixels,
     build: impl FnOnce(usize, usize) -> PixelGrid + 'static,
 ) -> Canvas<PixelGrid> {
+    pixel_canvas_with(pixel, None, build)
+}
+
+/// [`pixel_canvas`] with a dot style; `None` follows the app-wide
+/// [`set_dot_style`].
+pub fn pixel_canvas_with(
+    pixel: Pixels,
+    style: Option<DotStyle>,
+    build: impl FnOnce(usize, usize) -> PixelGrid + 'static,
+) -> Canvas<PixelGrid> {
     let pixel = pixel.max(px(1.0));
     canvas(
         move |bounds, _: &mut Window, _: &mut App| {
             let (w, h) = grid_size(bounds, pixel);
             build(w, h)
         },
-        move |bounds, grid, window, _| paint_grid(&grid, bounds.origin, pixel, window),
+        move |bounds, grid, window, cx| {
+            let style = style.unwrap_or_else(|| dot_style(cx));
+            paint_grid_styled(&grid, bounds.origin, pixel, style, window)
+        },
     )
 }
 

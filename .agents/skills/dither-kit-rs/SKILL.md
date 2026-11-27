@@ -53,7 +53,8 @@ allow a subsequent frame. The app owns labels, legends, hit handling and redraw
 scheduling. For backgrounds, derive a bounded frame with `dither_rune::frame(time,
 fps)` and use it as an input to `background`; schedule modest redraws and stop when
 reduced motion is enabled. `dither_rune::shimmer(frame, fps, || view)` makes every canvas built
-inside the closure shimmer. See the [Rune gallery](https://github.com/DeepanshuMishraa/dither-kit-rs/blob/main/crates/dither-rune/examples/gallery.rs),
+inside the closure shimmer, and `dither_rune::dots(DotStyle::Round, || view)` draws round dots
+instead of square pixels. See the [Rune gallery](https://github.com/DeepanshuMishraa/dither-kit-rs/blob/main/crates/dither-rune/examples/gallery.rs),
 [Rune dependency setup](https://github.com/anomalyco/rune/blob/30c564251a9c0e2687720a5b12c903af04d5f2b1/crates/rune/README.md#depending-on-rune)
 and [Rune hello example](https://github.com/anomalyco/rune/tree/30c564251a9c0e2687720a5b12c903af04d5f2b1/examples/hello).
 
@@ -105,7 +106,9 @@ All charts (`DitherChart`, `DitherPie`, `DitherRadar`, `DitherSparkline`) also h
 replay the entrance), `.bloom(Bloom)`, `.pixel_size(px)` (default 3px) and `.shimmer(bool)`
 (the dots keep breathing and sparkling after the entrance; paused under reduced motion).
 `DitherGradient`, `DitherBackground`, `DitherMeter` and `DitherButton` take `.shimmer(bool)`
-too.
+too. Every component takes `.dot_style(DotStyle::Square | DotStyle::Round)`; set the app-wide
+default with `dither_gpui::set_dot_style(DotStyle::Round, cx)` (default square). Round draws a
+disc per pixel with gaps, matching the terminal's kitty dots.
 
 Callbacks take `&Option<usize>`, so they work with `cx.listener`:
 

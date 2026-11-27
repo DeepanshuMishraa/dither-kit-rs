@@ -236,6 +236,40 @@ impl PixelGrid {
     }
 }
 
+/// How a backend draws each lit pixel.
+///
+/// `Square` fills the whole pixel, so neighbours touch and merge into runs:
+/// the classic hard-edged dither. `Round` draws a disc in the middle of
+/// each pixel with a gap around it, the dotted LED / halftone look, and
+/// matches the terminal's kitty-graphics dots.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum DotStyle {
+    #[default]
+    Square,
+    Round,
+}
+
+impl DotStyle {
+    pub const ALL: [DotStyle; 2] = [DotStyle::Square, DotStyle::Round];
+
+    /// Dot diameter as a fraction of the pixel pitch for [`DotStyle::Round`].
+    pub const ROUND_DIAMETER: f32 = 0.72;
+
+    pub fn name(self) -> &'static str {
+        match self {
+            DotStyle::Square => "square",
+            DotStyle::Round => "round",
+        }
+    }
+
+    pub fn next(self) -> DotStyle {
+        match self {
+            DotStyle::Square => DotStyle::Round,
+            DotStyle::Round => DotStyle::Square,
+        }
+    }
+}
+
 /// Glow strength around lit pixels.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Bloom {
