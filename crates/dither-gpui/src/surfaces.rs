@@ -10,7 +10,7 @@ use gpui_kit::{App, Div, ElementId, Pixels, Role, SharedString, StyleRefinement,
 use gpui_motion_kit::ValueState;
 use gpui_motion_kit::core::{Spring, Transition};
 
-use crate::pixels::{Clock, pixel_canvas};
+use crate::pixels::{Clock, pixel_canvas, shimmer_time, shimmered};
 
 /// A dithered gradient. By default it fills its parent (`absolute`, inset
 /// 0) like dither-kit's `DitherGradient`; restyle it to size it yourself.
@@ -19,6 +19,7 @@ pub struct DitherGradient {
     base: Div,
     spec: GradientSpec,
     pixel: Pixels,
+    shimmer: bool,
 }
 
 impl DitherGradient {
@@ -27,6 +28,7 @@ impl DitherGradient {
             base: div().absolute().inset_0(),
             spec: GradientSpec::new(from),
             pixel: px(3.0),
+            shimmer: false,
         }
     }
 
@@ -56,6 +58,12 @@ impl DitherGradient {
         self.pixel = pixel;
         self
     }
+
+    /// Animate the dots: each breathes, a sheen sweeps across, a few flash.
+    pub fn shimmer(mut self, shimmer: bool) -> Self {
+        self.shimmer = shimmer;
+        self
+    }
 }
 
 impl Styled for DitherGradient {
@@ -65,10 +73,11 @@ impl Styled for DitherGradient {
 }
 
 impl RenderOnce for DitherGradient {
-    fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let spec = self.spec;
+        let shimmer = self.shimmer.then(|| shimmer_time(window, cx)).flatten();
         self.base.overflow_hidden().child(
-            pixel_canvas(self.pixel, move |w, h| spec.render(w, h))
+            pixel_canvas(self.pixel, move |w, h| shimmered(spec.render(w, h), shimmer))
                 .absolute()
                 .size_full(),
         )
@@ -86,6 +95,7 @@ pub struct DitherBackground {
     spec: BackgroundSpec,
     pixel: Pixels,
     speed: f32,
+    shimmer: bool,
 }
 
 impl DitherBackground {
@@ -96,6 +106,7 @@ impl DitherBackground {
             spec: BackgroundSpec::new(field, tone),
             pixel: px(4.0),
             speed: 1.0,
+            shimmer: false,
         }
     }
 
@@ -124,6 +135,12 @@ impl DitherBackground {
         self.speed = speed;
         self
     }
+
+    /// Twinkle the dots on top of the field's own motion.
+    pub fn shimmer(mut self, shimmer: bool) -> Self {
+        self.shimmer = shimmer;
+        self
+    }
 }
 
 impl Styled for DitherBackground {
@@ -137,8 +154,9 @@ impl RenderOnce for DitherBackground {
         let clock = window.use_keyed_state(self.id.clone(), cx, |_, _| Clock::new());
         let t = clock.update(cx, |clock, cx| clock.seconds(window, cx)) * self.speed;
         let spec = self.spec;
+        let shimmer = self.shimmer.then(|| shimmer_time(window, cx)).flatten();
         self.base.overflow_hidden().child(
-            pixel_canvas(self.pixel, move |w, h| spec.render(w, h, t))
+            pixel_canvas(self.pixel, move |w, h| shimmered(spec.render(w, h, t), shimmer))
                 .absolute()
                 .size_full(),
         )
@@ -201,6 +219,7 @@ pub struct DitherMeter {
     pixel: Pixels,
     height: Pixels,
     label: Option<SharedString>,
+    shimmer: bool,
 }
 
 impl DitherMeter {
@@ -213,6 +232,7 @@ impl DitherMeter {
             pixel: px(2.0),
             height: px(10.0),
             label: None,
+            shimmer: false,
         }
     }
 
@@ -228,6 +248,12 @@ impl DitherMeter {
 
     pub fn pixel_size(mut self, pixel: Pixels) -> Self {
         self.pixel = pixel;
+        self
+    }
+
+    /// Animate the dots: each breathes, a sheen sweeps across, a few flash.
+    pub fn shimmer(mut self, shimmer: bool) -> Self {
+        self.shimmer = shimmer;
         self
     }
 
@@ -247,6 +273,7 @@ impl RenderOnce for DitherMeter {
                 .value()
         });
         let (tone, fill) = (self.tone, self.fill);
+        let shimmer = self.shimmer.then(|| shimmer_time(window, cx)).flatten();
         let percent = format!("{}%", (self.value * 100.0).round() as u32);
         div()
             .id(self.id)
@@ -258,9 +285,11 @@ impl RenderOnce for DitherMeter {
             .w_full()
             .h(self.height)
             .child(
-                pixel_canvas(self.pixel, move |w, h| meter(w, h, shown as f32, tone, fill))
-                    .absolute()
-                    .size_full(),
+                pixel_canvas(self.pixel, move |w, h| {
+                    shimmered(meter(w, h, shown as f32, tone, fill), shimmer)
+                })
+                .absolute()
+                .size_full(),
             )
     }
 }

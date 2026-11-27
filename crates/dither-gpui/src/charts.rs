@@ -22,7 +22,7 @@ use gpui_kit::{
 use gpui_motion_kit::ValueState;
 use gpui_motion_kit::core::{Easing, Spring, Transition};
 
-use crate::pixels::{grid_size, hsla, pixel_canvas};
+use crate::pixels::{grid_size, hsla, pixel_canvas, shimmer_time, shimmered};
 
 type IndexHandler = Rc<dyn Fn(&Option<usize>, &mut Window, &mut App)>;
 
@@ -69,6 +69,7 @@ impl ChartState {
 #[derive(Clone, Copy)]
 struct Entrance {
     animate: bool,
+    shimmer: bool,
     duration: Duration,
     replay_token: u64,
 }
@@ -77,6 +78,7 @@ impl Default for Entrance {
     fn default() -> Self {
         Self {
             animate: true,
+            shimmer: false,
             duration: Duration::from_millis(900),
             replay_token: 0,
         }
@@ -88,6 +90,14 @@ macro_rules! entrance_builders {
         /// Animate the entrance (default true; skipped under reduced motion).
         pub fn animate(mut self, animate: bool) -> Self {
             self.entrance.animate = animate;
+            self
+        }
+
+        /// Keep the dots alive after the entrance: each one breathes, a
+        /// sheen sweeps across and a few flash. Off by default; paused
+        /// under reduced motion.
+        pub fn shimmer(mut self, shimmer: bool) -> Self {
+            self.entrance.shimmer = shimmer;
             self
         }
 
@@ -433,6 +443,7 @@ impl RenderOnce for DitherChart {
 
         // Dithered plot.
         let series = self.series.clone();
+        let shimmer = self.entrance.shimmer.then(|| shimmer_time(window, cx)).flatten();
         let canvas = pixel_canvas(pixel, move |w, h| {
             let mut c = Cartesian::new(kind, &series);
             c.stacked = stacked;
@@ -440,7 +451,7 @@ impl RenderOnce for DitherChart {
             c.hover = hover;
             c.selected = selected;
             c.bloom = bloom;
-            c.render(w, h)
+            shimmered(c.render(w, h), shimmer)
         })
         .absolute()
         .size_full();
@@ -665,8 +676,12 @@ impl RenderOnce for DitherPie {
         let theme = cx.theme();
 
         let slices = self.slices.clone();
+        let shimmer = self.entrance.shimmer.then(|| shimmer_time(window, cx)).flatten();
         let canvas = pixel_canvas(pixel, move |w, h| {
-            DitherPie::core(&slices, inner, progress, hover, bloom).render(w, h)
+            shimmered(
+                DitherPie::core(&slices, inner, progress, hover, bloom).render(w, h),
+                shimmer,
+            )
         })
         .absolute()
         .size_full();
@@ -809,12 +824,13 @@ impl RenderOnce for DitherRadar {
         let muted = theme.muted_foreground;
 
         let series = self.series.clone();
+        let shimmer = self.entrance.shimmer.then(|| shimmer_time(window, cx)).flatten();
         let canvas = pixel_canvas(pixel, move |w, h| {
             let mut r = Radar::new(&series);
             r.progress = progress;
             r.selected = selected;
             r.bloom = bloom;
-            r.render(w, h)
+            shimmered(r.render(w, h), shimmer)
         })
         .absolute()
         .size_full();
@@ -935,6 +951,7 @@ impl RenderOnce for DitherSparkline {
         });
         let hovered = self.hovered.unwrap_or(self_hover);
         let (values, tone, bloom) = (self.values.clone(), self.tone, self.bloom);
+        let shimmer = self.entrance.shimmer.then(|| shimmer_time(window, cx)).flatten();
         let st = state.clone();
         div()
             .id(self.id)
@@ -956,7 +973,7 @@ impl RenderOnce for DitherSparkline {
                     if !hovered {
                         g.bloom(bloom);
                     }
-                    g
+                    shimmered(g, shimmer)
                 })
                 .absolute()
                 .size_full(),

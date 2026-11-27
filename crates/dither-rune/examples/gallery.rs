@@ -3,7 +3,8 @@
 //!
 //! `cargo run -p dither-rune --example gallery` opens the window.
 //! `cargo run -p dither-rune --example gallery -- --snap gallery.png` renders
-//! it headless; add `--scene bars` or `--scene still` to pick a state.
+//! it headless; add `--scene bars`, `--scene still` or `--scene shimmer` to
+//! pick a state. `--animate` starts with every dot shimmering.
 
 use std::time::Duration;
 
@@ -27,6 +28,7 @@ struct State {
     fill: Fill,
     field: Field,
     paused: bool,
+    shimmer: bool,
     frame: u64,
 }
 
@@ -38,6 +40,7 @@ impl Default for State {
             fill: Fill::Gradient,
             field: Field::Plasma,
             paused: false,
+            shimmer: std::env::args().any(|a| a == "--animate" || a == "--shimmer"),
             frame: 0,
         }
     }
@@ -361,7 +364,15 @@ fn gradients_card() -> El {
     card("Gradients", "Two-tone blends, fades and halftone", r)
 }
 
-fn view(s: &State, _: &mut Cx<State>) -> El {
+fn view(s: &State, cx: &mut Cx<State>) -> El {
+    if s.shimmer {
+        // Every dither canvas built inside twinkles at the background's frame.
+        return dither_rune::shimmer(s.frame, FPS, || page(s, cx));
+    }
+    page(s, cx)
+}
+
+fn page(s: &State, _: &mut Cx<State>) -> El {
     let t = tok::theme(true);
     let pair = row().gap(16.0).flex_wrap().child(pie_card()).child(radar_card());
     col()
@@ -404,6 +415,11 @@ fn main() {
                 s.stacked = true;
             }),
             ("still", |s| s.paused = true),
+            ("shimmer", |s| {
+                s.shimmer = true;
+                s.frame = 5;
+                s.paused = true;
+            }),
         ],
         ..AppSpec::new("dither-kit gallery", (900.0, 760.0), State::default, view)
     });

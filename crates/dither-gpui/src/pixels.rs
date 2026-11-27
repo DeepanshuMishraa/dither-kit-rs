@@ -1,6 +1,7 @@
 //! Painting core [`PixelGrid`]s with GPUI quads, plus the shared motion clock.
 
-use std::time::Duration;
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
 
 use dither_core::{PixelGrid, Rgba as CoreRgba};
 use gpui_kit::{App, Bounds, Canvas, Hsla, Pixels, Rgba, Window, canvas, fill, point, px, size};
@@ -54,6 +55,26 @@ pub fn pixel_canvas(
         },
         move |bounds, grid, window, _| paint_grid(&grid, bounds.origin, pixel, window),
     )
+}
+
+/// Seconds for a component's `shimmer` flag ([`PixelGrid::shimmer`]),
+/// scheduling the next frame so the dots keep moving. `None` when the user
+/// prefers reduced motion, so shimmering pictures hold still.
+pub fn shimmer_time(window: &Window, cx: &App) -> Option<f32> {
+    static START: OnceLock<Instant> = OnceLock::new();
+    if cx.reduce_motion() {
+        return None;
+    }
+    window.request_animation_frame();
+    Some(START.get_or_init(Instant::now).elapsed().as_secs_f32())
+}
+
+/// Shimmers `grid` at `time` when it is `Some`.
+pub fn shimmered(mut grid: PixelGrid, time: Option<f32>) -> PixelGrid {
+    if let Some(t) = time {
+        grid.shimmer(t);
+    }
+    grid
 }
 
 /// A looping seconds clock for procedural effects (backgrounds, sparkles),

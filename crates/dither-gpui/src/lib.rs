@@ -30,7 +30,7 @@ pub use button::DitherButton;
 pub use charts::{
     DitherChart, DitherPie, DitherRadar, DitherSparkline, LegendEntry, legend, swatch, tone_color,
 };
-pub use pixels::{Clock, hsla, paint_grid, pixel_canvas};
+pub use pixels::{Clock, hsla, paint_grid, pixel_canvas, shimmer_time, shimmered};
 pub use surfaces::{DitherAvatar, DitherBackground, DitherGradient, DitherMeter};
 
 pub use dither_core;

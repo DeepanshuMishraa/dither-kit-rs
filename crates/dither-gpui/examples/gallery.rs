@@ -1,6 +1,8 @@
 //! dither-kit gallery for GPUI Kit.
 //!
 //! Run with: `cargo run -p dither-gpui --example gallery`
+//! Add `-- --animate` to start with the dots shimmering (or flip the
+//! Shimmer switch).
 
 use dither_gpui::prelude::Fill;
 use dither_gpui::prelude::*;
@@ -23,6 +25,7 @@ struct Gallery {
     field: Field,
     deploys: u32,
     upload: f32,
+    shimmer: bool,
 }
 
 impl Gallery {
@@ -36,6 +39,7 @@ impl Gallery {
             field: Field::Plasma,
             deploys: 0,
             upload: 0.35,
+            shimmer: std::env::args().any(|a| a == "--animate" || a == "--shimmer"),
         }
     }
 
@@ -111,7 +115,8 @@ impl Render for Gallery {
             .child(
                 DitherBackground::new("hero-bg", self.field, Tone::Purple)
                     .accent(Tone::Pink)
-                    .density(0.7),
+                    .density(0.7)
+                    .shimmer(self.shimmer),
             )
             .child(
                 v_flex()
@@ -206,6 +211,15 @@ impl Render for Gallery {
                         cx.notify();
                     })),
             )
+            .child(
+                Switch::new("shimmer")
+                    .label("Shimmer")
+                    .checked(self.shimmer)
+                    .on_change(cx.listener(|this, v: &bool, _, cx| {
+                        this.shimmer = *v;
+                        cx.notify();
+                    })),
+            )
             .child(div().flex_1())
             .child(
                 Button::new("theme")
@@ -233,6 +247,8 @@ impl Render for Gallery {
                 .labels(MONTHS)
                 .stacked(self.stacked)
                 .bloom(self.bloom)
+                .shimmer(self.shimmer)
+                .shimmer(self.shimmer)
                 .replay_token(self.replay)
                 .height(px(260.0)),
             cx,
@@ -255,6 +271,7 @@ impl Render for Gallery {
             .inner_radius(0.58)
             .size(px(210.0))
             .bloom(self.bloom)
+            .shimmer(self.shimmer)
             .replay_token(self.replay),
             cx,
         );
@@ -272,6 +289,7 @@ impl Render for Gallery {
             )
             .size(px(200.0))
             .bloom(self.bloom)
+            .shimmer(self.shimmer)
             .replay_token(self.replay),
             cx,
         );
@@ -320,52 +338,60 @@ impl Render for Gallery {
                             .child(
                                 DitherSparkline::new(SharedString::from(format!("spark-{i}")), values, tone)
                                     .height(px(44.0))
-                                    .replay_token(self.replay),
+                                    .replay_token(self.replay)
+                                    .shimmer(self.shimmer),
                             )
                     }),
             );
 
-        let buttons =
-            card(
-                "Buttons",
-                "Kit buttons with a texture that thickens on hover and press",
-                v_flex()
-                    .gap_3()
-                    .child(
-                        h_flex()
-                            .gap_3()
-                            .flex_wrap()
-                            .child(DitherButton::new("deploy", "Deploy").tone(Tone::Green).on_click(
-                                cx.listener(|this, _, _, cx| {
+        let buttons = card(
+            "Buttons",
+            "Kit buttons with a texture that thickens on hover and press",
+            v_flex()
+                .gap_3()
+                .child(
+                    h_flex()
+                        .gap_3()
+                        .flex_wrap()
+                        .child(
+                            DitherButton::new("deploy", "Deploy")
+                                .tone(Tone::Green)
+                                .shimmer(self.shimmer)
+                                .on_click(cx.listener(|this, _, _, cx| {
                                     this.deploys += 1;
                                     this.upload = (this.upload + 0.15).min(1.0);
                                     cx.notify();
-                                }),
-                            ))
-                            .child(DitherButton::new("preview", "Preview").tone(Tone::Blue).outline())
-                            .child(DitherButton::new("dismiss", "Dismiss").tone(Tone::Pink).ghost())
-                            .child(
-                                DitherButton::new("delete", "Delete deploys")
-                                    .tone(Tone::Red)
-                                    .disabled(self.deploys == 0)
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.deploys = 0;
-                                        this.upload = 0.0;
-                                        cx.notify();
-                                    })),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.muted_foreground)
-                            .child(match self.deploys {
-                                0 => "No deploys yet. Delete stays disabled until you deploy.".to_string(),
-                                n => format!("{n} deploy(s) queued."),
-                            }),
-                    ),
-                cx,
-            );
+                                })),
+                        )
+                        .child(
+                            DitherButton::new("preview", "Preview")
+                                .tone(Tone::Blue)
+                                .outline()
+                                .shimmer(self.shimmer),
+                        )
+                        .child(DitherButton::new("dismiss", "Dismiss").tone(Tone::Pink).ghost())
+                        .child(
+                            DitherButton::new("delete", "Delete deploys")
+                                .tone(Tone::Red)
+                                .disabled(self.deploys == 0)
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.deploys = 0;
+                                    this.upload = 0.0;
+                                    cx.notify();
+                                })),
+                        ),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.muted_foreground)
+                        .child(match self.deploys {
+                            0 => "No deploys yet. Delete stays disabled until you deploy.".to_string(),
+                            n => format!("{n} deploy(s) queued."),
+                        }),
+                ),
+            cx,
+        );
 
         let meters = card(
             "Meters",
@@ -388,6 +414,7 @@ impl Render for Gallery {
                             div().flex_1().child(
                                 DitherMeter::new(SharedString::from(format!("meter-{i}")), v, Tone::ALL[i])
                                     .fill(f)
+                                    .shimmer(self.shimmer)
                                     .label(f.name()),
                             ),
                         )
@@ -444,6 +471,7 @@ impl Render for Gallery {
                 ]
                 .into_iter()
                 .map(|g| {
+                    let g = g.shimmer(self.shimmer);
                     div()
                         .relative()
                         .flex_1()

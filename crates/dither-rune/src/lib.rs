@@ -13,7 +13,8 @@
 //! it. Grids are cached by key, size and inputs, so a view that re-runs
 //! without changes does not rasterize again. Animated backgrounds take the
 //! time as an input: drive it from the app's `poll` at a modest frame rate
-//! ([`frame`]) and stop when reduced motion is on.
+//! ([`frame`]) and stop when reduced motion is on. Wrap any part of a view
+//! in [`shimmer`] to make its dots twinkle the same way.
 #![allow(missing_docs)]
 
 use std::{
@@ -82,6 +83,23 @@ const CACHE_LIMIT: usize = 512;
 
 thread_local! {
     static CACHE: RefCell<HashMap<u64, Shape>> = RefCell::new(HashMap::new());
+    static SHIMMER: std::cell::Cell<Option<f32>> = const { std::cell::Cell::new(None) };
+}
+
+/// Builds `view` with every dither canvas inside it shimmering at animation
+/// `frame` of `fps`: each dot breathes, a sheen sweeps across and a few
+/// flash, while shapes stay put. Drive `frame` from the app's `poll` with
+/// [`frame`] as for backgrounds, and pass a fixed frame (or skip the
+/// wrapper) when reduced motion is on.
+///
+/// ```ignore
+/// dither_rune::shimmer(s.frame, 12.0, || dither_rune::meter("m", 3.0, 0.6, Tone::Blue, Fill::Gradient))
+/// ```
+pub fn shimmer<R>(frame: u64, fps: f32, view: impl FnOnce() -> R) -> R {
+    let previous = SHIMMER.with(|s| s.replace(Some(background_time(frame, fps))));
+    let out = view();
+    SHIMMER.with(|s| s.set(previous));
+    out
 }
 
 fn cached(id: u64, build: impl FnOnce() -> Shape) -> Shape {
@@ -114,9 +132,16 @@ pub fn canvas(key: &str, dot: f32, inputs: impl Hash, build: impl FnOnce(usize, 
         return e;
     };
     let mut hasher = DefaultHasher::new();
-    (key, cols, rows, dot.to_bits()).hash(&mut hasher);
+    let shimmer = SHIMMER.with(std::cell::Cell::get);
+    (key, cols, rows, dot.to_bits(), shimmer.map(f32::to_bits)).hash(&mut hasher);
     inputs.hash(&mut hasher);
-    e.shape(cached(hasher.finish(), || shape(&build(cols, rows), dot)))
+    e.shape(cached(hasher.finish(), || {
+        let mut grid = build(cols, rows);
+        if let Some(t) = shimmer {
+            grid.shimmer(t);
+        }
+        shape(&grid, dot)
+    }))
 }
 
 fn canvas_dimensions(w: f32, h: f32, dot: f32) -> Option<(usize, usize)> {
@@ -276,6 +301,17 @@ mod tests {
         assert_eq!(g.runs().count(), 2);
         assert!(!shape(&g, 2.0).is_empty());
         assert!(shape(&PixelGrid::new(3, 3), 2.0).is_empty());
+    }
+
+    #[test]
+    fn shimmer_scope_is_restored() {
+        assert_eq!(SHIMMER.with(std::cell::Cell::get), None);
+        let inner = shimmer(6, 12.0, || {
+            let nested = shimmer(24, 12.0, || SHIMMER.with(std::cell::Cell::get));
+            (nested, SHIMMER.with(std::cell::Cell::get))
+        });
+        assert_eq!(inner, (Some(2.0), Some(0.5)));
+        assert_eq!(SHIMMER.with(std::cell::Cell::get), None);
     }
 
     #[test]

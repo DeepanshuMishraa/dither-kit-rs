@@ -176,6 +176,42 @@ impl PixelGrid {
         }
     }
 
+    /// Makes a still picture feel alive: every lit pixel breathes on its own
+    /// phase, a soft sheen sweeps left to right, and a few pixels flash
+    /// toward white. Shapes never move, so charts stay readable.
+    ///
+    /// `time` is in seconds; call it once per frame on a freshly rendered
+    /// grid. Every backend's `shimmer` flag is built on this.
+    pub fn shimmer(&mut self, time: f32) {
+        use std::f32::consts::TAU;
+        let w = self.width.max(1) as f32;
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let Some(c) = self.cells[y * self.width + x] else {
+                    continue;
+                };
+                let (xi, yi) = (x as i32, y as i32);
+                let phase = hash01(xi ^ 0x2f1b, yi) * TAU;
+                let speed = 0.8 + 1.6 * hash01(yi ^ 0x33c7, xi);
+                let breathe = 0.5 + 0.5 * (time * speed + phase).sin();
+                // A broad sheen crossing the grid about every four seconds.
+                let u = x as f32 / w;
+                let sheen = (1.0 - ((u - (time * 0.25).fract() * 1.6 + 0.3).abs() * 5.0)).max(0.0);
+                let mut out = c.fade(0.5 + 0.5 * breathe);
+                let lift = sheen * 0.45;
+                if hash01(xi ^ 0x7a3d, yi ^ 0x11) < 0.06 {
+                    let flash = (time * speed * 0.9 + phase * 1.7).sin().max(0.0).powi(10);
+                    out = out.mix(Rgba::WHITE.with_alpha(c.a), (lift + flash * 0.85).min(1.0));
+                    out.a = c.a;
+                } else if lift > 0.0 {
+                    out = out.mix(Rgba::WHITE.with_alpha(out.a), lift * 0.5);
+                    out.a = c.a.min((out.a as f32 * (1.0 + lift)) as u8);
+                }
+                self.cells[y * self.width + x] = Some(out);
+            }
+        }
+    }
+
     /// Sprinkles twinkling highlight pixels ("sparkles wink").
     ///
     /// `density` is the fraction of pixels that can sparkle; `time` is in
@@ -270,6 +306,23 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn shimmer_moves_colour_but_never_shape() {
+        let mut g = PixelGrid::new(16, 8);
+        for x in 0..16 {
+            g.set(x, 3, Rgba::hex(0x3b82f6));
+        }
+        let (mut a, mut b) = (g.clone(), g.clone());
+        a.shimmer(0.0);
+        b.shimmer(1.3);
+        assert_ne!(a, b, "time changes the picture");
+        for y in 0..8 {
+            for x in 0..16 {
+                assert_eq!(a.get(x, y).is_some(), g.get(x, y).is_some());
+            }
+        }
     }
 
     #[test]

@@ -16,7 +16,7 @@ use gpui_kit::{App, ClickEvent, ElementId, MouseButton, Pixels, SharedString, Wi
 use gpui_motion_kit::ValueState;
 use gpui_motion_kit::core::{Spring, Transition};
 
-use crate::pixels::{Clock, hsla, pixel_canvas};
+use crate::pixels::{Clock, hsla, pixel_canvas, shimmer_time, shimmered};
 
 /// Retained per-button presentation state (keyed by the button id).
 struct ButtonFx {
@@ -36,6 +36,7 @@ pub struct DitherButton {
     style: ButtonStyle,
     disabled: bool,
     pixel: Pixels,
+    shimmer: bool,
     on_click: Option<ClickHandler>,
 }
 
@@ -48,6 +49,7 @@ impl DitherButton {
             style: ButtonStyle::Solid,
             disabled: false,
             pixel: px(2.0),
+            shimmer: false,
             on_click: None,
         }
     }
@@ -73,6 +75,13 @@ impl DitherButton {
 
     pub fn pixel_size(mut self, pixel: Pixels) -> Self {
         self.pixel = pixel;
+        self
+    }
+
+    /// Keep the texture alive at rest: each dot breathes, a sheen sweeps
+    /// across, a few flash. Paused under reduced motion.
+    pub fn shimmer(mut self, shimmer: bool) -> Self {
+        self.shimmer = shimmer;
         self
     }
 
@@ -135,8 +144,11 @@ impl RenderOnce for DitherButton {
             .active(surface);
 
         let pixel = self.pixel;
+        let shimmer = (self.shimmer && !self.disabled)
+            .then(|| shimmer_time(window, cx))
+            .flatten();
         let texture = pixel_canvas(pixel, move |w, h| {
-            button_texture(w, h, tone, style, density, time)
+            shimmered(button_texture(w, h, tone, style, density, time), shimmer)
         })
         .absolute()
         .size_full();
