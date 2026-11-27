@@ -19,7 +19,7 @@ Rules that matter:
 
 - MSRV is **Rust 1.95**, edition 2024.
 - `dither-gpui` requires `gpui-kit` pinned to **exactly `=0.7.3`** (the version `gpui-motion-kit 0.5` is built against). Do not bump it.
-- `dither-ratatui` needs a **truecolor terminal**. Each cell holds two square pixels (`▀`/`▄` half blocks).
+- `dither-ratatui` needs a **truecolor terminal**. `Raster::current()` auto-picks kitty graphics (real round dots; kitty and Ghostty, not in tmux) or braille (2×4 dots per cell) elsewhere. `Raster::HalfBlock` is the old `▀` mode. Override with `Raster::set_default(..)`, per widget with `.raster(..)`, or with `DITHER_RASTER=kitty|braille|halfblock`. Call `dither_ratatui::kitty::flush(&mut stdout)` after each `terminal.draw(..)` so kitty uploads can't be lost under overlays.
 - Both frontends re-export the core as `dither_core`; do not add `dither-core` separately unless you use it directly.
 - On Linux, GPUI needs `libfontconfig-dev libwayland-dev libxkbcommon-x11-dev libx11-xcb-dev libvulkan1` and a Vulkan driver.
 
@@ -52,7 +52,9 @@ sizes the grid to Rune's laid-out element size; it paints nothing before layout,
 allow a subsequent frame. The app owns labels, legends, hit handling and redraw
 scheduling. For backgrounds, derive a bounded frame with `dither_rune::frame(time,
 fps)` and use it as an input to `background`; schedule modest redraws and stop when
-reduced motion is enabled. See the [Rune gallery](https://github.com/DeepanshuMishraa/dither-kit-rs/blob/main/crates/dither-rune/examples/gallery.rs),
+reduced motion is enabled. `dither_rune::shimmer(frame, fps, || view)` makes every canvas built
+inside the closure shimmer, and `dither_rune::dots(DotStyle::Round, || view)` draws round dots
+instead of square pixels. See the [Rune gallery](https://github.com/DeepanshuMishraa/dither-kit-rs/blob/main/crates/dither-rune/examples/gallery.rs),
 [Rune dependency setup](https://github.com/anomalyco/rune/blob/30c564251a9c0e2687720a5b12c903af04d5f2b1/crates/rune/README.md#depending-on-rune)
 and [Rune hello example](https://github.com/anomalyco/rune/tree/30c564251a9c0e2687720a5b12c903af04d5f2b1/examples/hello).
 
@@ -101,7 +103,12 @@ you only pass data. Give each instance a **unique, stable id**.
 
 All charts (`DitherChart`, `DitherPie`, `DitherRadar`, `DitherSparkline`) also have
 `.animate(bool)`, `.animation_duration(Duration)`, `.replay_token(u64)` (change the value to
-replay the entrance), `.bloom(Bloom)` and `.pixel_size(px)` (default 3px).
+replay the entrance), `.bloom(Bloom)`, `.pixel_size(px)` (default 3px) and `.shimmer(bool)`
+(the dots keep breathing and sparkling after the entrance; paused under reduced motion).
+`DitherGradient`, `DitherBackground`, `DitherMeter` and `DitherButton` take `.shimmer(bool)`
+too. Every component takes `.dot_style(DotStyle::Square | DotStyle::Round)`; set the app-wide
+default with `dither_gpui::set_dot_style(DotStyle::Round, cx)` (default square). Round draws a
+disc per pixel with gaps, matching the terminal's kitty dots.
 
 Callbacks take `&Option<usize>`, so they work with `cx.listener`:
 
@@ -180,7 +187,8 @@ app.button.tick(ButtonStyle::Solid, dt);                       // advance hover/
 
 Entrance animation: keep a `t` that advances each frame and pass
 `.progress(ease::out_cubic(t.min(1.0)))`. Animated `Background` and button sparkles take a
-running time in seconds. Redraw on a timer (~30–60 fps) while anything animates.
+running time in seconds. Every widget takes `.shimmer(true).time(seconds)` to make its dots
+breathe and sparkle; shapes don't move. Redraw on a timer (~30–60 fps) while anything animates.
 
 ## Core only (`dither-core`)
 
@@ -202,7 +210,8 @@ for run in grid.runs() {
 ```
 
 Output is deterministic (ordered Bayer thresholds are stateless per pixel), so it is safe for
-snapshot tests and does not shimmer while animating.
+snapshot tests and does not flicker while animating. `grid.shimmer(time)` is the opt-in motion
+every frontend's `shimmer` flag uses.
 
 ## Reference
 

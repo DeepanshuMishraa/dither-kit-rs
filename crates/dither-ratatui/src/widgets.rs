@@ -10,7 +10,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::Span;
 use ratatui::widgets::Widget;
 
-use crate::raster::{color, fill_bg, paint, pixel_size};
+use crate::raster::{Look, color, fill_bg, look_builders};
 use crate::theme::Theme;
 
 /// A dithered gradient filling its whole area.
@@ -18,6 +18,7 @@ use crate::theme::Theme;
 pub struct Gradient {
     pub gradient: CoreGradient,
     pub theme: Theme,
+    pub look: Look,
 }
 
 impl Gradient {
@@ -25,14 +26,18 @@ impl Gradient {
         Self {
             gradient,
             theme: Theme::default(),
+            look: Look::default(),
         }
     }
+
+    look_builders!();
 }
 
 impl Widget for Gradient {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let (w, h) = pixel_size(area);
-        paint(&self.gradient.render(w, h), area, buf, self.theme.background);
+        let (w, h) = self.look.raster().pixel_size(area);
+        self.look
+            .paint(self.gradient.render(w, h), area, buf, self.theme.background);
     }
 }
 
@@ -40,25 +45,30 @@ impl Widget for Gradient {
 #[derive(Clone, Copy, Debug)]
 pub struct Background {
     pub background: CoreBackground,
-    pub time: f32,
     pub theme: Theme,
+    pub look: Look,
 }
 
 impl Background {
     pub fn new(background: CoreBackground, time: f32) -> Self {
         Self {
             background,
-            time,
             theme: Theme::default(),
+            look: Look {
+                time,
+                ..Look::default()
+            },
         }
     }
+
+    look_builders!();
 }
 
 impl Widget for Background {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let (w, h) = pixel_size(area);
-        paint(
-            &self.background.render(w, h, self.time),
+        let (w, h) = self.look.raster().pixel_size(area);
+        self.look.paint(
+            self.background.render(w, h, self.look.time),
             area,
             buf,
             self.theme.background,
@@ -104,9 +114,9 @@ pub struct Button<'a> {
     pub tone: Tone,
     pub style: ButtonStyle,
     pub state: ButtonState,
-    pub time: f32,
     pub disabled: bool,
     pub theme: Theme,
+    pub look: Look,
 }
 
 impl<'a> Button<'a> {
@@ -116,9 +126,9 @@ impl<'a> Button<'a> {
             tone,
             style: ButtonStyle::Solid,
             state: ButtonState::default(),
-            time: 0.0,
             disabled: false,
             theme: Theme::default(),
+            look: Look::default(),
         }
     }
 
@@ -132,10 +142,7 @@ impl<'a> Button<'a> {
         self
     }
 
-    pub fn time(mut self, time: f32) -> Self {
-        self.time = time;
-        self
-    }
+    look_builders!();
 
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
@@ -152,23 +159,25 @@ impl Widget for Button<'_> {
         if let Some(surface) = self.style.surface(tone) {
             fill_bg(area, buf, surface);
         }
-        let (w, h) = pixel_size(area);
+        let raster = self.look.raster();
+        let (sx, sy) = raster.dots_per_cell();
+        let (w, h) = raster.pixel_size(area);
         let density = if self.disabled {
             0.15
         } else {
             self.state.density(self.style)
         };
-        let mut tex = button_texture(w, h, tone, self.style, density, self.time);
+        let mut tex = button_texture(w, h, tone, self.style, density, self.look.time);
         // Clear a calm band behind the label so text stays legible.
         let label_w = self.label.chars().count() + 2;
-        let lx = (w.saturating_sub(label_w)) / 2;
-        let ly = (area.height as usize / 2) * 2;
-        for y in ly..ly + 2 {
-            for x in lx..lx + label_w {
+        let lx = (area.width as usize).saturating_sub(label_w) / 2;
+        let ly = area.height as usize / 2;
+        for y in ly * sy..(ly + 1) * sy {
+            for x in lx * sx..(lx + label_w) * sx {
                 tex.plot(x as i32, y as i32, None);
             }
         }
-        paint(&tex, area, buf, self.theme.background);
+        self.look.paint(tex, area, buf, self.theme.background);
         let fg = if self.disabled {
             self.theme.muted
         } else {
@@ -197,6 +206,7 @@ pub struct Avatar<'a> {
     /// 1 = 8x4 cells, 2 = 16x8 cells, ...
     pub scale: usize,
     pub theme: Theme,
+    pub look: Look,
 }
 
 impl<'a> Avatar<'a> {
@@ -206,8 +216,11 @@ impl<'a> Avatar<'a> {
             hue: None,
             scale: 1,
             theme: Theme::default(),
+            look: Look::default(),
         }
     }
+
+    look_builders!();
 
     pub fn hue(mut self, hue: f32) -> Self {
         self.hue = Some(hue);
@@ -228,14 +241,16 @@ impl<'a> Avatar<'a> {
 impl Widget for Avatar<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let src = avatar(self.name, self.hue);
-        let s = self.scale;
-        let mut g = dither_core::PixelGrid::new(8 * s, 8 * s);
-        for y in 0..8 * s {
-            for x in 0..8 * s {
-                g.plot(x as i32, y as i32, src.get(x / s, y / s));
+        let (cols, rows) = self.size();
+        let cell = Rect::new(area.x, area.y, cols.min(area.width), rows.min(area.height));
+        let (w, h) = self.look.raster().pixel_size(Rect::new(0, 0, cols, rows));
+        let mut g = dither_core::PixelGrid::new(w, h);
+        for y in 0..h {
+            for x in 0..w {
+                g.plot(x as i32, y as i32, src.get(x * 8 / w, y * 8 / h));
             }
         }
-        paint(&g, area, buf, self.theme.background);
+        self.look.paint(g, cell, buf, self.theme.background);
     }
 }
 
@@ -246,6 +261,7 @@ pub struct Meter {
     pub tone: Tone,
     pub fill: Fill,
     pub theme: Theme,
+    pub look: Look,
 }
 
 impl Meter {
@@ -255,8 +271,11 @@ impl Meter {
             tone,
             fill: Fill::Gradient,
             theme: Theme::default(),
+            look: Look::default(),
         }
     }
+
+    look_builders!();
 
     pub fn fill(mut self, fill: Fill) -> Self {
         self.fill = fill;
@@ -266,9 +285,9 @@ impl Meter {
 
 impl Widget for Meter {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let (w, h) = pixel_size(area);
-        paint(
-            &meter(w, h, self.value, self.tone, self.fill),
+        let (w, h) = self.look.raster().pixel_size(area);
+        self.look.paint(
+            meter(w, h, self.value, self.tone, self.fill),
             area,
             buf,
             self.theme.background,

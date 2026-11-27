@@ -9,7 +9,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Widget};
 
-use crate::raster::{color, paint, pixel_size};
+use crate::raster::{Look, color, look_builders};
 use crate::theme::Theme;
 use crate::widgets::{Legend, LegendItem};
 
@@ -29,6 +29,7 @@ pub struct Chart<'a> {
     pub tooltip: bool,
     pub y_axis: bool,
     pub theme: Theme,
+    pub look: Look,
 }
 
 impl<'a> Chart<'a> {
@@ -46,8 +47,11 @@ impl<'a> Chart<'a> {
             tooltip: true,
             y_axis: true,
             theme: Theme::default(),
+            look: Look::default(),
         }
     }
+
+    look_builders!();
 
     pub fn area(series: &'a [Series]) -> Self {
         Self::new(CartesianKind::Area, series)
@@ -197,14 +201,18 @@ impl Widget for Chart<'_> {
         }
         let plot = self.plot_area(area);
         let core = self.core();
-        let (pw, ph) = pixel_size(plot);
-        paint(&core.render(pw, ph), plot, buf, self.theme.background);
+        let raster = self.look.raster();
+        let (sx, sy) = raster.dots_per_cell();
+        let (sx, sy) = (sx as f32, sy as f32);
+        let (pw, ph) = raster.pixel_size(plot);
+        self.look
+            .paint(core.render(pw, ph), plot, buf, self.theme.background);
 
         // Y axis tick labels, right-aligned against the plot.
         let scale = core.scale();
         if self.y_axis {
             for &t in &scale.ticks {
-                let row = plot.y + (scale.y(t, ph) / 2.0).floor() as u16;
+                let row = plot.y + (scale.y(t, ph) / sy).floor() as u16;
                 let text = format_value(t);
                 let x = plot.x.saturating_sub(text.len() as u16 + 1);
                 buf.set_string(x, row.min(plot.bottom().saturating_sub(1)), text, muted);
@@ -215,7 +223,7 @@ impl Widget for Chart<'_> {
             let row = plot.bottom();
             let mut next_free = plot.x;
             for (i, label) in self.labels.iter().enumerate().take(core.len()) {
-                let cx = plot.x as f32 + core.column_x(i, pw);
+                let cx = plot.x as f32 + core.column_x(i, pw) / sx;
                 let len = label.chars().count() as u16;
                 let x = (cx - len as f32 / 2.0).round().max(plot.x as f32) as u16;
                 let x = x.min(plot.right().saturating_sub(len));
@@ -234,7 +242,7 @@ impl Widget for Chart<'_> {
             }
         }
         if let (true, Some(i)) = (self.tooltip, self.hover.filter(|i| *i < core.len())) {
-            let anchor = plot.x + core.column_x(i, pw).round() as u16;
+            let anchor = plot.x + (core.column_x(i, pw) / sx).round() as u16;
             let title = self.labels.get(i).copied();
             let rows: Vec<(Tone, &str, f64)> = self
                 .series
@@ -315,6 +323,7 @@ pub struct PieChart<'a> {
     pub bloom: Bloom,
     pub legend: bool,
     pub theme: Theme,
+    pub look: Look,
 }
 
 impl<'a> PieChart<'a> {
@@ -327,8 +336,11 @@ impl<'a> PieChart<'a> {
             bloom: Bloom::Off,
             legend: true,
             theme: Theme::default(),
+            look: Look::default(),
         }
     }
+
+    look_builders!();
 
     pub fn donut(mut self, inner_radius: f32) -> Self {
         self.inner_radius = inner_radius;
@@ -377,17 +389,23 @@ impl<'a> PieChart<'a> {
         if !plot.contains((col, row).into()) {
             return None;
         }
-        let (w, h) = pixel_size(plot);
+        let raster = self.look.raster();
+        let (sx, sy) = raster.dots_per_cell();
+        let (w, h) = raster.pixel_size(plot);
         let geo = self.core().geometry(w, h);
-        geo.index_at((col - plot.x) as f32 + 0.5, ((row - plot.y) * 2) as f32 + 1.0)
+        geo.index_at(
+            ((col - plot.x) as f32 + 0.5) * sx as f32,
+            ((row - plot.y) as f32 + 0.5) * sy as f32,
+        )
     }
 }
 
 impl Widget for PieChart<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let plot = self.plot_area(area);
-        let (w, h) = pixel_size(plot);
-        paint(&self.core().render(w, h), plot, buf, self.theme.background);
+        let (w, h) = self.look.raster().pixel_size(plot);
+        self.look
+            .paint(self.core().render(w, h), plot, buf, self.theme.background);
         // Centre label inside a donut: hovered slice or the total.
         if self.inner_radius >= 0.45 {
             let (label, value) = match self.hover.and_then(|i| self.slices.get(i)) {
@@ -441,6 +459,7 @@ pub struct RadarChart<'a> {
     pub bloom: Bloom,
     pub legend: bool,
     pub theme: Theme,
+    pub look: Look,
 }
 
 impl<'a> RadarChart<'a> {
@@ -453,8 +472,11 @@ impl<'a> RadarChart<'a> {
             bloom: Bloom::Off,
             legend: true,
             theme: Theme::default(),
+            look: Look::default(),
         }
     }
+
+    look_builders!();
 
     pub fn progress(mut self, progress: f32) -> Self {
         self.progress = progress;
@@ -485,16 +507,22 @@ impl Widget for RadarChart<'_> {
             side_cols,
             side_cols / 2,
         );
-        let (w, h) = pixel_size(plot);
+        let raster = self.look.raster();
+        let (sx, sy) = raster.dots_per_cell();
+        let (sx, sy) = (sx as f32, sy as f32);
+        let (w, h) = raster.pixel_size(plot);
         let mut radar = Radar::new(self.series);
         radar.progress = self.progress;
         radar.selected = self.selected;
         radar.bloom = self.bloom;
-        paint(&radar.render(w, h), plot, buf, self.theme.background);
+        self.look
+            .paint(radar.render(w, h), plot, buf, self.theme.background);
         let geo = radar.geometry(w, h);
         let muted = Style::default().fg(color(self.theme.muted));
         for (label, (tx, ty)) in self.axes.iter().zip(geo.axis_tips) {
-            let (dx, dy) = (tx - geo.center.0, ty - geo.center.1);
+            let (tx, ty) = (tx / sx, ty * 2.0 / sy);
+            let (cx, cy) = (geo.center.0 / sx, geo.center.1 * 2.0 / sy);
+            let (dx, dy) = (tx - cx, ty - cy);
             let len = label.chars().count() as f32;
             let col = plot.x as f32 + tx + dx.signum() * 1.5
                 - if dx.abs() < 2.0 {
@@ -549,6 +577,7 @@ pub struct Sparkline<'a> {
     pub hovered: bool,
     pub progress: f32,
     pub theme: Theme,
+    pub look: Look,
 }
 
 impl<'a> Sparkline<'a> {
@@ -559,8 +588,11 @@ impl<'a> Sparkline<'a> {
             hovered: false,
             progress: 1.0,
             theme: Theme::default(),
+            look: Look::default(),
         }
     }
+
+    look_builders!();
 
     pub fn hovered(mut self, hovered: bool) -> Self {
         self.hovered = hovered;
@@ -575,9 +607,9 @@ impl<'a> Sparkline<'a> {
 
 impl Widget for Sparkline<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let (w, h) = pixel_size(area);
-        paint(
-            &sparkline(self.values, self.tone, w, h, self.hovered, self.progress),
+        let (w, h) = self.look.raster().pixel_size(area);
+        self.look.paint(
+            sparkline(self.values, self.tone, w, h, self.hovered, self.progress),
             area,
             buf,
             self.theme.background,
@@ -614,6 +646,7 @@ mod tests {
         Chart::area(&s)
             .labels(&labels)
             .hover(Some(2))
+            .raster(crate::Raster::Braille)
             .render(area, &mut buf);
         let text: String = buf.content().iter().map(|c| c.symbol()).collect();
         assert!(text.contains("Jan") && text.contains("Jun"));
@@ -621,7 +654,7 @@ mod tests {
             text.contains("Desktop") && text.contains("237"),
             "tooltip shows hovered values"
         );
-        assert!(text.contains('▀') || text.contains('▄'));
+        assert!(text.chars().any(|c| ('\u{2801}'..='\u{28ff}').contains(&c)));
     }
 
     #[test]
@@ -641,7 +674,7 @@ mod tests {
             Slice::new("A", 1.0, Tone::Green),
             Slice::new("B", 1.0, Tone::Orange),
         ];
-        let pie = PieChart::new(&slices);
+        let pie = PieChart::new(&slices).raster(crate::Raster::Braille);
         let area = Rect::new(0, 0, 40, 22);
         let plot = pie.plot_area(area);
         // Right half is the first slice (clockwise from 12 o'clock).

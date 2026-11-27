@@ -4,8 +4,12 @@
 //! Needs a truecolor terminal. Mouse hover/click is supported.
 //!
 //! Keys: 1/2/3 or Tab switch pages · ←/→ move crosshair · k chart kind ·
-//! s stack · f fill · b bloom · r replay · Space/Enter press focused button ·
-//! ↑/↓ focus buttons · q quit
+//! s stack · f fill · b bloom · r replay · a shimmer · g raster ·
+//! Space/Enter press focused button · ↑/↓ focus buttons · q quit
+//!
+//! Flags: `--animate` starts with the dots shimmering; `--raster
+//! kitty|braille|halfblock` overrides the auto-detected raster (kitty
+//! graphics in kitty and Ghostty, braille elsewhere).
 
 use std::io;
 use std::time::{Duration, Instant};
@@ -17,12 +21,13 @@ use crossterm::execute;
 use dither_ratatui::dither_core::ease;
 use dither_ratatui::prelude::*;
 use dither_ratatui::{
-    Avatar, Background, Button, ButtonState, Chart, Gradient, Meter, PieChart, RadarChart, Sparkline, Theme,
+    Avatar, Background, Button, ButtonState, Chart, Gradient, Kitty, Meter, PieChart, RadarChart, Raster,
+    Sparkline, Theme,
 };
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Paragraph};
+use ratatui::widgets::{Block, BorderType, Clear, Paragraph};
 use ratatui::{DefaultTerminal, Frame};
 
 const MONTHS: [&str; 12] = [
@@ -68,6 +73,8 @@ struct App {
     pie_area: Rect,
     button_areas: [Rect; 4],
     quit: bool,
+    shimmer: bool,
+    raster: Raster,
 }
 
 impl App {
@@ -126,6 +133,8 @@ impl App {
             pie_area: Rect::default(),
             button_areas: [Rect::default(); 4],
             quit: false,
+            shimmer: false,
+            raster: Raster::current(),
         }
     }
 
@@ -167,6 +176,8 @@ impl App {
             .progress(self.progress())
             .hover(self.hover)
             .bloom(self.bloom)
+            .shimmer(self.shimmer)
+            .time(self.time())
     }
 
     fn set_fill(&mut self) {
@@ -190,6 +201,14 @@ impl App {
                 }
             }
             KeyCode::Char('r') => self.replay = Instant::now(),
+            KeyCode::Char('a') => self.shimmer = !self.shimmer,
+            KeyCode::Char('g') => {
+                self.raster = match self.raster {
+                    Raster::Kitty(_) => Raster::Braille,
+                    Raster::Braille => Raster::HalfBlock,
+                    Raster::HalfBlock => Raster::Kitty(Kitty::detect().unwrap_or(Kitty::new(10, 20))),
+                }
+            }
             KeyCode::Char('b') => self.bloom = self.bloom.next(),
             KeyCode::Char('s') => {
                 self.stacked = !self.stacked;
@@ -278,7 +297,16 @@ fn card(title: &str) -> Block<'_> {
         ))
 }
 
+fn raster_name(r: Raster) -> &'static str {
+    match r {
+        Raster::Kitty(_) => "kitty",
+        Raster::Braille => "braille",
+        Raster::HalfBlock => "half-block",
+    }
+}
+
 fn draw(f: &mut Frame, app: &mut App) {
+    Raster::set_default(app.raster);
     let theme = Theme::default();
     let bg = dither_ratatui::raster::color(theme.background);
     let fg = dither_ratatui::raster::color(theme.foreground);
@@ -330,6 +358,11 @@ fn draw(f: &mut Frame, app: &mut App) {
             Tone::ALL[app.tone].name()
         ),
     };
+    let help = format!(
+        "{help} · a shimmer ({}) · g raster ({})",
+        if app.shimmer { "on" } else { "off" },
+        raster_name(app.raster)
+    );
     f.render_widget(
         Paragraph::new(help).style(Style::default().fg(dither_ratatui::raster::color(theme.muted))),
         footer,
@@ -360,7 +393,9 @@ fn draw_charts(f: &mut Frame, app: &mut App, area: Rect) {
         .donut(0.55)
         .progress(app.progress())
         .hover(app.pie_hover)
-        .bloom(app.bloom);
+        .bloom(app.bloom)
+        .shimmer(app.shimmer)
+        .time(app.time());
     f.render_widget(pie, inner);
 
     let [radar_area, sparks] =
@@ -371,7 +406,9 @@ fn draw_charts(f: &mut Frame, app: &mut App, area: Rect) {
     f.render_widget(
         RadarChart::new(&app.radar, &SKILLS)
             .progress(app.progress())
-            .bloom(app.bloom),
+            .bloom(app.bloom)
+            .shimmer(app.shimmer)
+            .time(app.time()),
         inner,
     );
 
@@ -404,7 +441,9 @@ fn draw_charts(f: &mut Frame, app: &mut App, area: Rect) {
         f.render_widget(
             Sparkline::new(&values, tone)
                 .progress(app.progress())
-                .hovered(app.hover.is_some()),
+                .hovered(app.hover.is_some())
+                .shimmer(app.shimmer)
+                .time(app.time()),
             line,
         );
     }
@@ -436,6 +475,7 @@ fn draw_controls(f: &mut Frame, app: &mut App, area: Rect) {
                 .style(style)
                 .state(app.buttons[i])
                 .time(t)
+                .shimmer(app.shimmer)
                 .disabled(disabled),
             b,
         );
@@ -466,7 +506,7 @@ fn draw_controls(f: &mut Frame, app: &mut App, area: Rect) {
         .spacing(1)
         .split(inner);
     for (name, col) in names.iter().zip(cols.iter()) {
-        let av = Avatar::new(name);
+        let av = Avatar::new(name).shimmer(app.shimmer).time(t);
         let (w, h) = av.size();
         f.render_widget(av, Rect::new(col.x + (col.width - w) / 2, col.y, w, h));
         f.render_widget(
@@ -486,7 +526,13 @@ fn draw_controls(f: &mut Frame, app: &mut App, area: Rect) {
             Paragraph::new(format!("{:<8}{:>3}%", fill.name(), (v * 100.0) as u32)),
             label,
         );
-        f.render_widget(Meter::new(v, Tone::ALL[(i + app.tone) % 7]).fill(*fill), bar);
+        f.render_widget(
+            Meter::new(v, Tone::ALL[(i + app.tone) % 7])
+                .fill(*fill)
+                .shimmer(app.shimmer)
+                .time(t),
+            bar,
+        );
     }
 
     let block = card("Gradients");
@@ -510,7 +556,7 @@ fn draw_controls(f: &mut Frame, app: &mut App, area: Rect) {
             .matrix(Matrix::Bayer4),
     ];
     for (spec, col) in specs.into_iter().zip(cols.iter()) {
-        f.render_widget(Gradient::new(spec), *col);
+        f.render_widget(Gradient::new(spec).shimmer(app.shimmer).time(t), *col);
     }
 }
 
@@ -520,7 +566,7 @@ fn draw_backgrounds(f: &mut Frame, app: &mut App, area: Rect) {
     let spec = BackgroundSpec::new(Field::ALL[app.field], tone)
         .accent(accent)
         .density(0.75);
-    f.render_widget(Background::new(spec, app.time()), area);
+    f.render_widget(Background::new(spec, app.time()).shimmer(app.shimmer), area);
     let w = 44.min(area.width);
     let card_area = Rect::new(area.x + (area.width - w) / 2, area.y + area.height / 2 - 3, w, 6);
     let theme = Theme::default();
@@ -528,6 +574,7 @@ fn draw_backgrounds(f: &mut Frame, app: &mut App, area: Rect) {
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(dither_ratatui::raster::color(theme.border)))
         .style(Style::default().bg(dither_ratatui::raster::color(theme.popover)));
+    f.render_widget(Clear, card_area);
     f.render_widget(
         Paragraph::new(vec![
             Line::from(Span::styled(
@@ -544,11 +591,12 @@ fn draw_backgrounds(f: &mut Frame, app: &mut App, area: Rect) {
     );
 }
 
-fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
-    let mut app = App::new();
+fn run(terminal: &mut DefaultTerminal, mut app: App) -> io::Result<()> {
     while !app.quit {
         app.tick();
         terminal.draw(|f| draw(f, &mut app))?;
+        // Kitty image uploads go out after the frame, so overlays can't drop them.
+        dither_ratatui::kitty::flush(&mut io::stdout())?;
         if event::poll(Duration::from_millis(16))? {
             match event::read()? {
                 Event::Key(k) if k.kind == KeyEventKind::Press => app.on_key(k.code),
@@ -560,19 +608,41 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
     Ok(())
 }
 
-/// `--snapshot <dir>`: renders every page off-screen to PPM images (for docs
-/// and visual review) instead of starting the interactive app.
-fn snapshot(dir: &str) -> io::Result<()> {
+/// `--snapshot <dir>`: renders every page off-screen and writes each
+/// cell (symbol, colours, modifiers) to `<dir>/<page>.json` instead of
+/// starting the interactive app. `docs/render_snapshot.py` turns a dump
+/// into a PNG, decoding kitty graphics the way a terminal would.
+fn snapshot(dir: &str, mut app: App, time: Option<f32>) -> io::Result<()> {
     use ratatui::backend::TestBackend;
     use ratatui::style::Color;
     std::fs::create_dir_all(dir)?;
-    let (cols, rows, cw, ch) = (160u16, 50u16, 6usize, 12usize);
-    let mut app = App::new();
+    let (cols, rows) = (160u16, 50u16);
+    if let Some(t) = time {
+        app.start = Instant::now() - Duration::from_secs_f32(t);
+    }
     app.replay -= Duration::from_secs(2);
     app.hover = Some(7);
     app.pie_hover = Some(1);
     app.buttons[0].hovered = true;
     app.buttons[1].focused = true;
+    let json = |s: &str| {
+        let mut o = String::with_capacity(s.len() + 2);
+        o.push('"');
+        for c in s.chars() {
+            match c {
+                '"' => o.push_str("\\\""),
+                '\\' => o.push_str("\\\\"),
+                c if (c as u32) < 0x20 => o.push_str(&format!("\\u{:04x}", c as u32)),
+                c => o.push(c),
+            }
+        }
+        o.push('"');
+        o
+    };
+    let rgb = |c: Color| match c {
+        Color::Rgb(r, g, b) => format!("[{r},{g},{b}]"),
+        _ => "null".into(),
+    };
     for (page, name) in [
         (Page::Charts, "charts"),
         (Page::Controls, "controls"),
@@ -582,68 +652,66 @@ fn snapshot(dir: &str) -> io::Result<()> {
         let mut terminal = ratatui::Terminal::new(TestBackend::new(cols, rows)).expect("test backend");
         terminal.draw(|f| draw(f, &mut app)).expect("test backend");
         let buf = terminal.backend().buffer().clone();
-        let rgb = |c: Color, d: [u8; 3]| match c {
-            Color::Rgb(r, g, b) => [r, g, b],
-            _ => d,
+        let cell_px = match app.raster {
+            Raster::Kitty(k) => k.cell,
+            _ => (20, 40),
         };
-        let (w, h) = (cols as usize * cw, rows as usize * ch);
-        let mut img = vec![0u8; w * h * 3];
+        let mut out = format!(
+            "{{\"cols\":{cols},\"rows\":{rows},\"cell\":[{},{}],\"raster\":{},\"cells\":[",
+            cell_px.0,
+            cell_px.1,
+            json(raster_name(app.raster))
+        );
         for y in 0..rows {
             for x in 0..cols {
-                let cell = &buf[(x, y)];
-                let bg = rgb(cell.bg, [11, 11, 15]);
-                let fg = rgb(cell.fg, [231, 231, 234]);
-                let sym = cell.symbol();
-                for py in 0..ch {
-                    for px in 0..cw {
-                        let c = match sym {
-                            "▀" => {
-                                if py < ch / 2 {
-                                    fg
-                                } else {
-                                    bg
-                                }
-                            }
-                            "▄" => {
-                                if py >= ch / 2 {
-                                    fg
-                                } else {
-                                    bg
-                                }
-                            }
-                            " " => bg,
-                            _ => {
-                                if (1..cw - 1).contains(&px)
-                                    && (3..ch - 2).contains(&py)
-                                    && (px + py) % 2 == 0
-                                {
-                                    fg
-                                } else {
-                                    bg
-                                }
-                            }
-                        };
-                        let i = ((y as usize * ch + py) * w + x as usize * cw + px) * 3;
-                        img[i..i + 3].copy_from_slice(&c);
-                    }
+                let c = &buf[(x, y)];
+                if x + y > 0 {
+                    out.push(',');
                 }
+                out.push_str(&format!(
+                    "[{},{},{},{}]",
+                    json(c.symbol()),
+                    rgb(c.fg),
+                    rgb(c.bg),
+                    u8::from(c.modifier.contains(Modifier::BOLD))
+                ));
             }
         }
-        let mut out = format!("P6\n{w} {h}\n255\n").into_bytes();
-        out.extend_from_slice(&img);
-        std::fs::write(format!("{dir}/{name}.ppm"), out)?;
+        out.push_str("]}");
+        std::fs::write(format!("{dir}/{name}.json"), out)?;
     }
     Ok(())
 }
 
 fn main() -> io::Result<()> {
     let args: Vec<String> = std::env::args().collect();
-    if let Some(i) = args.iter().position(|a| a == "--snapshot") {
-        return snapshot(args.get(i + 1).map_or("snapshots", String::as_str));
+    let value = |flag: &str| {
+        args.iter()
+            .position(|a| a == flag)
+            .and_then(|i| args.get(i + 1))
+            .map(String::as_str)
+    };
+    let mut app = App::new();
+    app.shimmer = args.iter().any(|a| a == "--animate" || a == "--shimmer");
+    match value("--raster") {
+        Some("kitty") => {
+            // `--cell WxH` sets the cell size in pixels (e.g. for snapshots).
+            let cell = value("--cell")
+                .and_then(|c| c.split_once('x'))
+                .and_then(|(w, h)| Some(Kitty::new(w.parse().ok()?, h.parse().ok()?)));
+            app.raster = Raster::Kitty(cell.or_else(Kitty::detect).unwrap_or(Kitty::new(10, 20)));
+        }
+        Some("braille") => app.raster = Raster::Braille,
+        Some("halfblock" | "half-block") => app.raster = Raster::HalfBlock,
+        _ => {}
+    }
+    if args.iter().any(|a| a == "--snapshot") {
+        let time = value("--time").and_then(|t| t.parse().ok());
+        return snapshot(value("--snapshot").unwrap_or("snapshots"), app, time);
     }
     let mut terminal = ratatui::init();
     execute!(io::stdout(), EnableMouseCapture)?;
-    let result = run(&mut terminal);
+    let result = run(&mut terminal, app);
     execute!(io::stdout(), DisableMouseCapture)?;
     ratatui::restore();
     result

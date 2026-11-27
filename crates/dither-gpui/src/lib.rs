@@ -30,7 +30,10 @@ pub use button::DitherButton;
 pub use charts::{
     DitherChart, DitherPie, DitherRadar, DitherSparkline, LegendEntry, legend, swatch, tone_color,
 };
-pub use pixels::{Clock, hsla, paint_grid, pixel_canvas};
+pub use pixels::{
+    Clock, dot_style, hsla, paint_grid, paint_grid_styled, pixel_canvas, pixel_canvas_with, set_dot_style,
+    shimmer_time, shimmered,
+};
 pub use surfaces::{DitherAvatar, DitherBackground, DitherGradient, DitherMeter};
 
 pub use dither_core;
@@ -42,7 +45,7 @@ pub mod prelude {
         DitherRadar, DitherSparkline,
     };
     pub use dither_core::{
-        Bloom, ButtonStyle, CartesianKind, Direction, Field, Fill, Matrix, Series, Slice, Tone,
+        Bloom, ButtonStyle, CartesianKind, Direction, DotStyle, Field, Fill, Matrix, Series, Slice, Tone,
     };
     pub use gpui_kit::component::Disableable;
 }

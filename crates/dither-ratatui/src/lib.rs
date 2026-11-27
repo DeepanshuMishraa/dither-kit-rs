@@ -2,8 +2,10 @@
 //!
 //! Dithered charts, buttons, gradients, backgrounds, avatars, and meters for
 //! [Ratatui](https://ratatui.rs) terminal apps. Pixels come from
-//! [`dither_core`] and are drawn two per cell with half-block glyphs, so a
-//! truecolor terminal is required.
+//! [`dither_core`] and reach the terminal through a [`Raster`]: real round
+//! image dots with kitty graphics (kitty, Ghostty), braille dots elsewhere,
+//! or the old half blocks. A truecolor terminal is required. Every widget
+//! takes `.shimmer(true)` to animate its dots.
 //!
 //! ```no_run
 //! use dither_ratatui::{Chart, prelude::*};
@@ -15,11 +17,13 @@
 //! ```
 
 pub mod charts;
+pub mod kitty;
 pub mod raster;
 pub mod theme;
 pub mod widgets;
 
 pub use charts::{Chart, PieChart, RadarChart, Sparkline};
+pub use raster::{Kitty, Raster};
 pub use theme::Theme;
 pub use widgets::{Avatar, Background, Button, ButtonState, Gradient, Legend, LegendItem, Meter};
 

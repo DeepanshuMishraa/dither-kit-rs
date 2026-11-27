@@ -13,7 +13,13 @@ categories = ["command-line-interface", "graphics", "visualization"]
 
 [dependencies]
 dither-core.workspace = true
-ratatui = "0.30"
+ratatui = "0.30.1"
+miniz_oxide = "0.8"
+
+[features]
+default = ["crossterm"]
+# Reads the terminal's cell size in pixels for kitty graphics detection.
+crossterm = ["ratatui/crossterm"]
 
 [dev-dependencies]
 crossterm = "0.29"

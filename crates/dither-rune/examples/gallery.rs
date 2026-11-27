@@ -3,13 +3,15 @@
 //!
 //! `cargo run -p dither-rune --example gallery` opens the window.
 //! `cargo run -p dither-rune --example gallery -- --snap gallery.png` renders
-//! it headless; add `--scene bars` or `--scene still` to pick a state.
+//! it headless; add `--scene bars`, `--scene still` or `--scene shimmer` to
+//! pick a state. `--animate` starts with every dot shimmering, and `--round`
+//! draws round dots instead of square pixels (`--scene round` too).
 
 use std::time::Duration;
 
 use dither_rune::{
-    Background, Cartesian, CartesianKind, Direction, Field, Fill, Gradient, Matrix, Pie, Radar, Series,
-    Slice, Tone,
+    Background, Cartesian, CartesianKind, Direction, DotStyle, Field, Fill, Gradient, Matrix, Pie, Radar,
+    Series, Slice, Tone,
 };
 use rune::tok::{self, type_};
 use rune::{AppSpec, Cx, El, ScrollSpec, Tx, col, el, row, text};
@@ -27,6 +29,8 @@ struct State {
     fill: Fill,
     field: Field,
     paused: bool,
+    shimmer: bool,
+    round: bool,
     frame: u64,
 }
 
@@ -38,6 +42,8 @@ impl Default for State {
             fill: Fill::Gradient,
             field: Field::Plasma,
             paused: false,
+            shimmer: std::env::args().any(|a| a == "--animate" || a == "--shimmer"),
+            round: std::env::args().any(|a| a == "--round"),
             frame: 0,
         }
     }
@@ -155,6 +161,10 @@ fn hero(s: &State) -> El {
         s.paused,
         |s| s.paused = !s.paused,
     ));
+    fields = fields.child(chip("round".into(), "Round", s.round, |s| s.round = !s.round));
+    fields = fields.child(chip("shimmer".into(), "Shimmer", s.shimmer, |s| {
+        s.shimmer = !s.shimmer
+    }));
     el().w_full()
         .h(200.0)
         .radius(10.0)
@@ -361,7 +371,22 @@ fn gradients_card() -> El {
     card("Gradients", "Two-tone blends, fades and halftone", r)
 }
 
-fn view(s: &State, _: &mut Cx<State>) -> El {
+fn view(s: &State, cx: &mut Cx<State>) -> El {
+    let style = if s.round {
+        DotStyle::Round
+    } else {
+        DotStyle::Square
+    };
+    dither_rune::dots(style, || {
+        if s.shimmer {
+            // Every dither canvas built inside twinkles at the background's frame.
+            return dither_rune::shimmer(s.frame, FPS, || page(s, cx));
+        }
+        page(s, cx)
+    })
+}
+
+fn page(s: &State, _: &mut Cx<State>) -> El {
     let t = tok::theme(true);
     let pair = row().gap(16.0).flex_wrap().child(pie_card()).child(radar_card());
     col()
@@ -404,6 +429,15 @@ fn main() {
                 s.stacked = true;
             }),
             ("still", |s| s.paused = true),
+            ("round", |s| {
+                s.round = true;
+                s.paused = true;
+            }),
+            ("shimmer", |s| {
+                s.shimmer = true;
+                s.frame = 5;
+                s.paused = true;
+            }),
         ],
         ..AppSpec::new("dither-kit gallery", (900.0, 760.0), State::default, view)
     });

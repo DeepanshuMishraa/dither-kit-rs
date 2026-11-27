@@ -13,7 +13,8 @@
 //! it. Grids are cached by key, size and inputs, so a view that re-runs
 //! without changes does not rasterize again. Animated backgrounds take the
 //! time as an input: drive it from the app's `poll` at a modest frame rate
-//! ([`frame`]) and stop when reduced motion is on.
+//! ([`frame`]) and stop when reduced motion is on. Wrap any part of a view
+//! in [`shimmer`] to make its dots twinkle the same way.
 #![allow(missing_docs)]
 
 use std::{
@@ -23,8 +24,8 @@ use std::{
 };
 
 pub use dither_core::{
-    self as core, Background, Bloom, Cartesian, CartesianKind, Direction, Field, Fill, Gradient, Matrix, Pie,
-    PixelGrid, Radar, Rgba, Series, Slice, Tone,
+    self as core, Background, Bloom, Cartesian, CartesianKind, Direction, DotStyle, Field, Fill, Gradient,
+    Matrix, Pie, PixelGrid, Radar, Rgba, Series, Slice, Tone,
 };
 use rune::{Color, El, Shape, el};
 
@@ -59,6 +60,37 @@ pub fn tone(c: Color) -> Tone {
     }
 }
 
+/// The grid as a shape in `style`: square pixels (one rectangle per run) or
+/// round dots (one disc per pixel with a gap around it).
+pub fn shape_styled(grid: &PixelGrid, dot: f32, style: DotStyle) -> Shape {
+    match style {
+        DotStyle::Square => shape(grid, dot),
+        DotStyle::Round => {
+            const SIDES: usize = 12;
+            let r = 0.5 * dot * DotStyle::ROUND_DIAMETER;
+            let ring: Vec<[f32; 2]> = (0..SIDES)
+                .map(|i| {
+                    let a = i as f32 / SIDES as f32 * std::f32::consts::TAU;
+                    [r * a.cos(), r * a.sin()]
+                })
+                .collect();
+            let mut s = Shape::new();
+            for y in 0..grid.height() {
+                for x in 0..grid.width() {
+                    let Some(c) = grid.get(x, y) else { continue };
+                    if c.a == 0 {
+                        continue;
+                    }
+                    let (cx, cy) = ((x as f32 + 0.5) * dot, (y as f32 + 0.5) * dot);
+                    let pts: Vec<[f32; 2]> = ring.iter().map(|[px, py]| [cx + px, cy + py]).collect();
+                    s = s.fill(pts, color(c));
+                }
+            }
+            s
+        }
+    }
+}
+
 /// The grid as a shape, `dot` points per pixel, one rectangle per run.
 pub fn shape(grid: &PixelGrid, dot: f32) -> Shape {
     let mut s = Shape::new();
@@ -74,7 +106,7 @@ pub fn shape(grid: &PixelGrid, dot: f32) -> Shape {
 pub fn pixels(grid: &PixelGrid, dot: f32) -> El {
     el().size(grid.width() as f32 * dot, grid.height() as f32 * dot)
         .a11y_hidden()
-        .shape(shape(grid, dot))
+        .shape(shape_styled(grid, dot, current_dots()))
 }
 
 /// Cache size: past this many grids the cache starts over.
@@ -82,6 +114,51 @@ const CACHE_LIMIT: usize = 512;
 
 thread_local! {
     static CACHE: RefCell<HashMap<u64, Shape>> = RefCell::new(HashMap::new());
+    static SHIMMER: std::cell::Cell<Option<f32>> = const { std::cell::Cell::new(None) };
+    static DOTS: std::cell::Cell<DotStyle> = const { std::cell::Cell::new(DotStyle::Square) };
+}
+
+/// Builds `view` with every dither element inside it drawn in `style`:
+/// square pixels (the default) or round dots with gaps between them.
+///
+/// ```ignore
+/// dither_rune::dots(DotStyle::Round, || page(s, cx))
+/// ```
+pub fn dots<R>(style: DotStyle, view: impl FnOnce() -> R) -> R {
+    /// Restores the enclosing style, also when `view` panics.
+    struct Restore(DotStyle);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            DOTS.with(|s| s.set(self.0));
+        }
+    }
+    let _restore = Restore(DOTS.with(|s| s.replace(style)));
+    view()
+}
+
+fn current_dots() -> DotStyle {
+    DOTS.with(std::cell::Cell::get)
+}
+
+/// Builds `view` with every dither canvas inside it shimmering at animation
+/// `frame` of `fps`: each dot breathes, a sheen sweeps across and a few
+/// flash, while shapes stay put. Drive `frame` from the app's `poll` with
+/// [`frame`] as for backgrounds, and pass a fixed frame (or skip the
+/// wrapper) when reduced motion is on.
+///
+/// ```ignore
+/// dither_rune::shimmer(s.frame, 12.0, || dither_rune::meter("m", 3.0, 0.6, Tone::Blue, Fill::Gradient))
+/// ```
+pub fn shimmer<R>(frame: u64, fps: f32, view: impl FnOnce() -> R) -> R {
+    /// Restores the enclosing scope's time, also when `view` panics.
+    struct Restore(Option<f32>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            SHIMMER.with(|s| s.set(self.0));
+        }
+    }
+    let _restore = Restore(SHIMMER.with(|s| s.replace(Some(background_time(frame, fps)))));
+    view()
 }
 
 fn cached(id: u64, build: impl FnOnce() -> Shape) -> Shape {
@@ -114,9 +191,17 @@ pub fn canvas(key: &str, dot: f32, inputs: impl Hash, build: impl FnOnce(usize, 
         return e;
     };
     let mut hasher = DefaultHasher::new();
-    (key, cols, rows, dot.to_bits()).hash(&mut hasher);
+    let shimmer = SHIMMER.with(std::cell::Cell::get);
+    let style = current_dots();
+    (key, cols, rows, dot.to_bits(), shimmer.map(f32::to_bits), style).hash(&mut hasher);
     inputs.hash(&mut hasher);
-    e.shape(cached(hasher.finish(), || shape(&build(cols, rows), dot)))
+    e.shape(cached(hasher.finish(), || {
+        let mut grid = build(cols, rows);
+        if let Some(t) = shimmer {
+            grid.shimmer(t);
+        }
+        shape_styled(&grid, dot, style)
+    }))
 }
 
 fn canvas_dimensions(w: f32, h: f32, dot: f32) -> Option<(usize, usize)> {
@@ -187,12 +272,13 @@ pub fn meter(key: &str, dot: f32, value: f32, tone: Tone, fill: Fill) -> El {
 /// dither-kit's 8×8 identicon for `name`, `size` points square.
 pub fn avatar(name: &str, size: f32, hue: Option<f32>) -> El {
     let mut hasher = DefaultHasher::new();
-    ("avatar", name, size.to_bits(), hue.map(f32::to_bits)).hash(&mut hasher);
+    let style = current_dots();
+    ("avatar", name, size.to_bits(), hue.map(f32::to_bits), style).hash(&mut hasher);
     let dot = size / 8.0;
     el().size(size, size)
         .a11y_hidden()
         .shape(cached(hasher.finish(), || {
-            shape(&dither_core::avatar(name, hue), dot)
+            shape_styled(&dither_core::avatar(name, hue), dot, style)
         }))
 }
 
@@ -276,6 +362,32 @@ mod tests {
         assert_eq!(g.runs().count(), 2);
         assert!(!shape(&g, 2.0).is_empty());
         assert!(shape(&PixelGrid::new(3, 3), 2.0).is_empty());
+    }
+
+    #[test]
+    fn round_dots_draw_one_disc_per_pixel_and_scope_restores() {
+        let mut g = PixelGrid::new(3, 1);
+        g.set(0, 0, Rgba::WHITE);
+        g.set(1, 0, Rgba::WHITE);
+        assert!(!shape_styled(&g, 4.0, DotStyle::Round).is_empty());
+        assert!(shape_styled(&PixelGrid::new(2, 2), 4.0, DotStyle::Round).is_empty());
+        assert_eq!(current_dots(), DotStyle::Square);
+        assert_eq!(dots(DotStyle::Round, current_dots), DotStyle::Round);
+        assert_eq!(current_dots(), DotStyle::Square);
+    }
+
+    #[test]
+    fn shimmer_scope_is_restored() {
+        assert_eq!(SHIMMER.with(std::cell::Cell::get), None);
+        let inner = shimmer(6, 12.0, || {
+            let nested = shimmer(24, 12.0, || SHIMMER.with(std::cell::Cell::get));
+            (nested, SHIMMER.with(std::cell::Cell::get))
+        });
+        assert_eq!(inner, (Some(2.0), Some(0.5)));
+        assert_eq!(SHIMMER.with(std::cell::Cell::get), None);
+        let caught = std::panic::catch_unwind(|| shimmer(6, 12.0, || panic!("view failed")));
+        assert!(caught.is_err());
+        assert_eq!(SHIMMER.with(std::cell::Cell::get), None, "restored after a panic");
     }
 
     #[test]

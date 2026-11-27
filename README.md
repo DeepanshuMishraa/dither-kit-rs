@@ -28,10 +28,12 @@ gradients do not have. dither-kit-rs brings the look of the React
 
 - **One look everywhere.** Every component rasterizes into the same `PixelGrid`. A chart in a
   desktop window and the same chart in a terminal come from identical pixels.
-- **Deterministic.** Ordered (Bayer) dithering is stateless per pixel. It does not shimmer
-  while animating and produces stable snapshots.
+- **Deterministic.** Ordered (Bayer) dithering is stateless per pixel. It does not flicker
+  while animating and produces stable snapshots. Motion is opt-in: the `shimmer` flag makes the
+  dots breathe and sparkle in every frontend.
 - **Native, not a screenshot.** On GPUI, pixels are GPU quads, with horizontal runs merged. In
-  the terminal they are half-block glyphs. Text, axes and tooltips use real native text.
+  the terminal they are real round image dots (kitty graphics) or braille dots. Text, axes and
+  tooltips use real native text.
 - **Small core.** `dither-core` has zero dependencies.
 
 ## Crates
@@ -204,6 +206,57 @@ positions into chart indexes:
 
 The widgets need a **truecolor terminal**. Most modern terminals support it.
 
+### How dots reach the terminal
+
+`Raster` decides how dither dots become cells. `Raster::current()` picks one on first use, and
+every widget takes `.raster(..)` to override it:
+
+| Raster | Looks like | Where |
+| --- | --- | --- |
+| `Raster::Kitty(Kitty)` | Real anti-aliased round dots with gaps, one colour per dot, at the terminal's true pixel size | kitty, Ghostty (auto-detected; not inside tmux) |
+| `Raster::Braille` | 2×4 small dots per cell, one colour per cell | Any truecolor terminal (the fallback) |
+| `Raster::HalfBlock` | 1×2 square pixels per cell (`▀`) | Opt-in; the old renderer |
+
+```rust
+use dither_ratatui::{Kitty, Raster};
+
+Raster::set_default(Raster::Braille);                              // whole app
+let chart = Chart::area(&series).raster(Raster::Kitty(Kitty::new(10, 20).dots_across(3)));
+```
+
+Set `DITHER_RASTER=kitty|braille|halfblock` to force a choice without code changes. Kitty images
+use [Unicode placeholders](https://sw.kovidgoyal.net/kitty/graphics-protocol/#unicode-placeholders),
+so they live in normal cells: text drawn over a placeholder replaces that part of the image, and
+each picture is re-sent only when it changes. Call `dither_ratatui::kitty::flush(&mut stdout)`
+after every `terminal.draw(..)`. Uploads then go straight to the terminal instead of riding inside
+a cell, where a tooltip or popup drawn on top could drop them.
+
+### Animation
+
+Every widget takes `.shimmer(true)` and `.time(seconds)`. Each lit dot breathes on its own
+phase, a soft sheen sweeps across, and a few dots flash white. Shapes never move, so charts stay
+readable. Redraw every frame with a running time:
+
+```rust
+Chart::area(&series).shimmer(true).time(app.start.elapsed().as_secs_f32())
+```
+
+GPUI components take `.shimmer(true)` and schedule their own frames. Shimmer pauses under the
+OS reduced-motion setting. In Rune, wrap any part of a view in
+`dither_rune::shimmer(frame, fps, || ...)`, and every canvas built inside it shimmers.
+
+### Dot style (desktop)
+
+GPUI and Rune draw square pixels by default (`DotStyle::Square`), the classic hard-edged
+dither. `DotStyle::Round` draws a disc in the middle of each pixel with a gap around it, like an
+LED panel or halftone print, and matches the terminal's kitty-graphics dots:
+
+```rust
+dither_gpui::set_dot_style(DotStyle::Round, cx);                  // whole GPUI app
+DitherChart::area("visitors", series).dot_style(DotStyle::Round); // one component
+dither_rune::dots(DotStyle::Round, || view(state, cx))            // a Rune subtree
+```
+
 ## Quick start: Rune
 
 `dither-rune` provides small functions that return Rune elements. Give each cached element a stable
@@ -257,6 +310,7 @@ for run in grid.runs() {
 ```sh
 cargo run -p dither-gpui    --example gallery   # desktop gallery
 cargo run -p dither-ratatui --example gallery   # terminal gallery (mouse + keyboard)
+cargo run -p dither-ratatui --example gallery -- --animate --raster braille
 cargo run -p dither-rune    --example gallery   # Rune gallery (Rust 1.99.1)
 cargo run -p dither-core    --example preview -- out.ppm
 ```
@@ -273,7 +327,15 @@ Terminal gallery keys:
 | `b` | Change bloom |
 | `r` | Replay the entrance |
 | `t` | Change tone |
+| `a` | Toggle shimmer |
+| `g` | Cycle raster (kitty, braille, half-block) |
 | `q` | Quit |
+
+Every gallery takes `--animate` to start with the dots shimmering. The GPUI and Rune galleries
+take `--round` for round dots and have a toggle for it. The terminal gallery's
+`--snapshot <dir>` writes each page as a JSON cell dump, and
+[`scripts/render_snapshot.py`](scripts/render_snapshot.py) turns a dump into a PNG. Kitty images
+are decoded from the escape data, as a terminal would decode them.
 
 ## Platform notes
 
@@ -313,7 +375,7 @@ Pixel screenshots in Kit tests are macOS-only, so check the desktop visuals by r
 dither-core      PixelGrid ← rasterizers (charts, gradient, background, button, avatar, meter)
    │                ↑ Matrix thresholds, Tone ramps, Fill, Bloom
    ├── dither-gpui      canvas → paint_quad per horizontal run; Kit theme, gpui-motion-kit
-   ├── dither-ratatui   ▀/▄ half blocks, two pixels per cell; alpha blended over cell bg
+   ├── dither-ratatui   Raster: kitty-graphics round dots, braille 2×4, or ▀/▄ half blocks
    └── dither-rune      canvas → Shape rectangle per horizontal run; cached by size and inputs
 ```
 

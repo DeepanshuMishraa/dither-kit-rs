@@ -61,6 +61,28 @@
     }
     get(x, y) { return x >= 0 && y >= 0 && x < this.w && y < this.h ? this.c[y * this.w + x] : null; }
     clear(x, y) { if (x >= 0 && y >= 0 && x < this.w && y < this.h) this.c[y * this.w + x] = null; }
+    // Port of PixelGrid::shimmer: each lit dot breathes on its own phase, a
+    // sheen sweeps across, and a few dots flash. Shapes never move.
+    shimmer(time) {
+      const w = Math.max(1, this.w);
+      for (let y = 0; y < this.h; y++) for (let x = 0; x < this.w; x++) {
+        const i = y * this.w + x, c = this.c[i];
+        if (!c) continue;
+        const [tone, level, alpha] = c;
+        const phase = hash01(x ^ 0x2f1b, y) * TAU, speed = 0.8 + 1.6 * hash01(y ^ 0x33c7, x);
+        const breathe = 0.5 + 0.5 * Math.sin(time * speed + phase);
+        const u = x / w, sweep = (time * 0.25) % 1;
+        const lift = Math.max(0, 1 - Math.abs(u - sweep * 1.6 + 0.3) * 5) * 0.45;
+        let l = level, a = alpha * (0.5 + 0.5 * breathe);
+        if (hash01(x ^ 0x7a3d, y ^ 0x11) < 0.06) {
+          const flash = Math.pow(Math.max(0, Math.sin(time * speed * 0.9 + phase * 1.7)), 10);
+          l = Math.min(1, level + Math.min(1, lift + flash * 0.85) * 0.6); a = alpha;
+        } else if (lift > 0) {
+          l = Math.min(1, level + lift * 0.3); a = Math.min(alpha, a * (1 + lift));
+        }
+        this.c[i] = [tone, l, a];
+      }
+    }
     bloom(radius, strength) {
       const src = this.c.slice();
       const at = (x, y) => (x >= 0 && y >= 0 && x < this.w && y < this.h ? src[y * this.w + x] : null);
@@ -322,6 +344,9 @@
     return g;
   }
 
+  // Page-wide effects: the `shimmer` flag and `DotStyle::Round`.
+  const fx = { shimmer: false, round: false };
+
   // ---------- Painting ----------
   const dpr = () => window.devicePixelRatio || 1;
   function fit(canvas, px) {
@@ -330,9 +355,31 @@
     if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
     return [Math.floor(r.width / px), Math.floor(r.height / px)];
   }
+  // DotStyle::Round: one disc per lit pixel, 0.72 of the pitch, gaps between.
+  function paintRound(ctx, g, s) {
+    const r = s * 0.36, buckets = new Map();
+    for (let i = 0; i < g.c.length; i++) {
+      const c = g.c[i]; if (!c) continue;
+      const key = color(c[0], c[1], c[2]);
+      let list = buckets.get(key);
+      if (!list) buckets.set(key, (list = []));
+      list.push(i);
+    }
+    for (const [fill, list] of buckets) {
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      for (const i of list) {
+        const cx = ((i % g.w) + 0.5) * s, cy = (Math.floor(i / g.w) + 0.5) * s;
+        ctx.moveTo(cx + r, cy);
+        ctx.arc(cx, cy, r, 0, TAU);
+      }
+      ctx.fill();
+    }
+  }
   function paint(canvas, g, px) {
     const ctx = canvas.getContext('2d'), s = px * dpr();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (fx.round) return paintRound(ctx, g, s);
     const buckets = new Map();
     for (let y = 0; y < g.h; y++) {
       let x = 0;
@@ -383,11 +430,14 @@
     for (const d of demos) {
       if (!d.visible) continue;
       const progress = d.entrance ? (reduced.matches ? 1 : easeOut((now - (d.start ?? now)) / 1000)) : 1;
-      const live = (d.animated && !reduced.matches) || progress < 1 || d.dirty;
+      const shimmer = fx.shimmer && !reduced.matches;
+      const live = ((d.animated || shimmer) && !reduced.matches) || progress < 1 || d.dirty;
       if (!live) continue;
       const [w, h] = fit(d.canvas, d.px);
       if (w < 1 || h < 1) continue;
-      paint(d.canvas, d.render(w, h, t, progress), d.px);
+      const g = d.render(w, h, t, progress);
+      if (shimmer) g.shimmer(t);
+      paint(d.canvas, g, d.px);
       d.dirty = false;
     }
     requestAnimationFrame(frame);
@@ -453,6 +503,32 @@
     }
     requestAnimationFrame(glideTip);
   })();
+
+  // Shimmer toggles (the `shimmer` flag every frontend has).
+  const shimmerButtons = $$('[data-shimmer-toggle]');
+  const setShimmer = on => {
+    fx.shimmer = on;
+    shimmerButtons.forEach(b => b.setAttribute('aria-pressed', String(on)));
+    demos.forEach(d => (d.dirty = true));
+  };
+  shimmerButtons.forEach(b => b.addEventListener('click', () => setShimmer(!fx.shimmer)));
+  if (/[?&#](animate|shimmer)\b/.test(location.search + location.hash)) setShimmer(true);
+  const roundButtons = $$('[data-round-toggle]');
+  const setRound = on => {
+    fx.round = on;
+    roundButtons.forEach(b => b.setAttribute('aria-pressed', String(on)));
+    demos.forEach(d => (d.dirty = true));
+  };
+  roundButtons.forEach(b => b.addEventListener('click', () => setRound(!fx.round)));
+  if (/[?&#]round\b/.test(location.search + location.hash)) setRound(true);
+
+  // Terminal before/after
+  const termImg = $('#term-img'), termCap = $('#term-cap');
+  if (termImg) $('#term-seg').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    termImg.src = b.dataset.src; termImg.alt = b.dataset.alt; termCap.textContent = b.dataset.cap;
+    $$('#term-seg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  });
 
   // Pie
   const SLICES = [
