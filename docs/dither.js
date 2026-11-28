@@ -449,8 +449,7 @@
   const swatch = tone => `<span class="sw" style="background:${color(tone, 0.6, 1)}"></span>`;
 
   // Logo
-  const logo = $('[data-demo="logo"]');
-  if (logo) demo(logo, 2.25, () => avatar('dither-kit-rs'));
+  $$('[data-demo="logo"]').forEach(c => demo(c, c.getBoundingClientRect().width / 8 || 2.25, () => avatar('dither-kit-rs')));
 
   // Hero chart
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -486,12 +485,15 @@
     tip.innerHTML = `<div class="t">${MONTHS[i]}</div>` + SERIES.map(s =>
       `<div class="r"><span>${swatch(s.tone)}${s.label}</span><b>${s.values[i]}</b></div>`).join('');
   }
-  stage.addEventListener('pointermove', e => {
+  const hoverAt = e => {
     const r = stage.getBoundingClientRect();
     const w = Math.floor(r.width / PX);
     setHover(clamp(Math.round(((e.clientX - r.left) / PX / (w - 1)) * 11), 0, 11));
-  });
-  stage.addEventListener('pointerleave', () => setHover(null));
+  };
+  stage.addEventListener('pointermove', hoverAt);
+  stage.addEventListener('pointerdown', hoverAt);
+  stage.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch') setHover(null); });
+  document.addEventListener('pointerdown', e => { if (!stage.contains(e.target)) setHover(null); });
   (function glideTip() {
     if (hero.hover != null) {
       const r = stage.getBoundingClientRect(), w = Math.floor(r.width / PX);
@@ -499,7 +501,7 @@
       hero.glide = hero.glide == null || reduced.matches ? target : hero.glide + (target - hero.glide) * 0.22;
       const tw = tip.offsetWidth;
       const x = hero.glide < r.width * 0.6 ? hero.glide + 16 : hero.glide - 16 - tw;
-      tip.style.transform = `translateX(${x}px)`;
+      tip.style.transform = `translateX(${clamp(x, 0, Math.max(0, r.width - tw))}px)`;
     }
     requestAnimationFrame(glideTip);
   })();
@@ -655,26 +657,80 @@
   }, { rootMargin: '-40% 0px -55% 0px' });
   $$('.content section[id]').forEach(s => spy.observe(s));
 
-  // Minimal syntax tinting + copy buttons.
+  // Copy helper.
+  async function copyText(text, label, idle) {
+    try { await navigator.clipboard.writeText(text); label.textContent = 'Copied'; }
+    catch { label.textContent = 'Press ⌘C'; }
+    setTimeout(() => (label.textContent = idle), 1400);
+  }
+  $$('[data-copy]').forEach(b => {
+    const hint = b.querySelector('.install-hint') || b, idle = hint.textContent;
+    b.addEventListener('click', () => copyText(b.dataset.copy, hint, idle));
+  });
+
+  // Minimal, language-aware syntax tinting + copy buttons. Each rule has four
+  // groups: comment, string, keyword, number.
   const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const RX = /(\/\/.*$|#.*$)|("(?:[^"\\]|\\.)*")|\b(use|let|fn|impl|for|in|mut|pub|struct|self|move|match|if|else|return|true|false|vec)\b|\b(\d+(?:\.\d*)?)/gm;
-  $$('pre code').forEach(code => {
-    const src = code.textContent;
+  const RULES = {
+    rust: /(\/\/.*$)|("(?:[^"\\]|\\.)*")|\b(use|let|fn|impl|for|in|mut|pub|struct|self|move|match|if|else|return|true|false|vec)\b|\b(\d+(?:\.\d*)?)/gm,
+    toml: /(#.*$)|("(?:[^"\\]|\\.)*")|(^\[[^\]\n]+\])|\b(\d+(?:\.\d*)?)\b/gm,
+    sh: /(#.*$)|("(?:[^"\\]|\\.)*")|(^(?:cargo|npx)\b)|(\0)/gm,
+  };
+  function tint(src, lang) {
+    const rx = RULES[lang];
+    if (!rx) return esc(src);
     let out = '', last = 0;
-    src.replace(RX, (m, c, s, k, n, i) => {
+    src.replace(rx, (m, c, s, k, n, i) => {
       out += esc(src.slice(last, i));
-      const cls = c ? 'c' : s ? 's' : k ? 'k' : 'n';
-      out += `<span class="tok-${cls}">${esc(m)}</span>`;
+      out += `<span class="tok-${c ? 'c' : s ? 's' : k ? 'k' : 'n'}">${esc(m)}</span>`;
       last = i + m.length;
       return m;
     });
-    code.innerHTML = out + esc(src.slice(last));
+    return out + esc(src.slice(last));
+  }
+  $$('pre > code').forEach(code => {
+    const pre = code.parentElement, src = code.textContent;
+    const lang = (code.className.match(/language-(\w+)/) || [])[1];
+    const html = tint(src, lang);
+    code.innerHTML = pre.classList.contains('cmd')
+      ? html.split('\n').map(l => `<span class="ln">${l}</span>`).join('\n')
+      : html;
+    const box = document.createElement('div');
+    box.className = 'code';
+    pre.replaceWith(box);
+    box.appendChild(pre);
     const b = document.createElement('button');
     b.className = 'copy'; b.type = 'button'; b.textContent = 'Copy';
-    b.addEventListener('click', async () => {
-      try { await navigator.clipboard.writeText(src); b.textContent = 'Copied'; } catch { b.textContent = 'Press ⌘C'; }
-      setTimeout(() => (b.textContent = 'Copy'), 1400);
-    });
-    code.parentElement.appendChild(b);
+    b.setAttribute('aria-label', 'Copy code');
+    b.addEventListener('click', () => copyText(src, b, 'Copy'));
+    box.appendChild(b);
   });
+
+  // Tabs.
+  $$('[data-tabs]').forEach(root => {
+    const tabs = $$('[role="tab"]', root);
+    const select = (t, focus) => {
+      tabs.forEach(x => {
+        const on = x === t;
+        x.setAttribute('aria-selected', String(on));
+        x.tabIndex = on ? 0 : -1;
+        document.getElementById(x.getAttribute('aria-controls')).hidden = !on;
+      });
+      if (focus) t.focus();
+    };
+    tabs.forEach((t, i) => {
+      t.addEventListener('click', () => select(t));
+      t.addEventListener('keydown', e => {
+        const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+        if (d) { e.preventDefault(); select(tabs[(i + d + tabs.length) % tabs.length], true); }
+      });
+    });
+  });
+
+  // Open a <details> when a link points into it.
+  const openTarget = () => {
+    const el = location.hash && document.getElementById(location.hash.slice(1));
+    if (el && el.tagName === 'DETAILS') el.open = true;
+  };
+  addEventListener('hashchange', openTarget); openTarget();
 })();
